@@ -6,6 +6,128 @@
 ![Python](https://img.shields.io/badge/Python-3.10+-green?logo=python)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-orange?logo=mysql)
 ![Gemini](https://img.shields.io/badge/Google_Gemini-AI-purple?logo=google)
+![Salt Edge](https://img.shields.io/badge/Salt_Edge-Fake_Integration-blue?logo=bancolombia)
+
+---
+
+## 🌟 Features Principali
+
+### 🏦 Integrazione Bancaria (Novità!)
+- **Open Banking Simulator**: Collega il tuo conto bancario tramite integrazione Salt Edge (Ambiente Fake/Sandbox).
+- **Sync Automatico**: Importa transazioni e saldo con un click.
+- **Auto-Categorizzazione**: Le transazioni importate vengono categorizzate automaticamente dall'AI.
+
+### 🎨 Esperienza Utente Avanzata
+- **Dark Mode**: Supporto completo per tema chiaro e scuro, sincronizzato con le impostazioni di sistema o manuale.
+- **Localizzazione**: Interfaccia completamente tradotta in Italiano 🇮🇹 e Inglese 🇬🇧.
+- **UI Moderna**: Grafici interattivi, skeleton loaders e animazioni fluide.
+
+### 🤖 Intelligenza Artificiale
+- **Financial Coach**: Chatta con "Savy Coach" per consigli su spese e budget (es. *"Posso permettermi questa cena?"*).
+- **Analisi Spese**: L'AI analizza i tuoi pattern di spesa e suggerisce dove risparmiare.
+- **Categorizzazione Intelligente**: Riconosce automaticamente merchant e tipologia di spesa.
+
+### 📊 Gestione Finanziaria
+- **Dashboard Completa**: Panoramica di saldo, entrate, uscite e budget mensile.
+- **Transazioni**: Aggiungi, modifica ed elimina transazioni manualmente o sincronizzale.
+- **Spese Ricorrenti**: Gestione bollette e abbonamenti con scadenze.
+- **Categorie Personalizzate**: Crea categorie con colori unici ed icone dedicate.
+
+---
+
+## 🏗️ Architettura
+
+### Stack Tecnologico
+
+**Frontend:**
+- **Flutter** (Dart) - Cross-platform (Android, iOS)
+- **Riverpod** - State Management reattivo
+- **Go Router** - Navigazione dichiarativa e deep linking
+- **Fl Chart** - Libreria grafici performante
+- **Shared Preferences** - Persistenza locale settings
+
+**Backend:**
+- **Python 3.10+** con **FastAPI**
+- **LangChain** + **Google Gemini** - Orchestrazione AI
+- **MySQL 8.0** - Database relazionale
+- **SQLAlchemy** - ORM
+- **Salt Edge (Fake)** - Simulazione Open Banking
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisiti
+
+- **Python 3.10+**
+- **Flutter 3.38+**
+- **MySQL 8.0+**
+- **Google Gemini API Key** ([Ottieni qui](https://makersuite.google.com/app/apikey))
+
+### 1️⃣ Setup Backend
+
+```bash
+cd backend
+
+# Crea virtual environment
+python -m venv venv
+.\venv\Scripts\activate  # Windows
+
+# Installa dipendenze
+pip install -r requirements.txt
+
+# Configura variabili ambiente
+cp .env.example .env
+# Modifica .env con:
+# - GEMINI_API_KEY
+# - MYSQL_CREDENTIALS
+
+# Inizializza Database
+mysql -u root -p savy_db < db/mysql_schema.sql
+
+# Avvia server
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 2️⃣ Setup Frontend
+
+```bash
+cd frontend
+
+# Installa dipendenze
+flutter pub get
+
+# Avvia App
+flutter run
+```
+
+**Nota per Emulatore Android:** Il backend è raggiungibile su `http://10.0.2.2:8000`.
+
+---
+
+## 🔐 Sicurezza & Privacy
+
+- **Autenticazione JWT**: Login sicuro con token.
+- **No Real Banking Data**: L'integrazione bancaria attuale utilizza dati simulati (Sandbox), nessun dato reale viene processato.
+- **Dati Locali**: Le preferenze di tema e lingua sono salvate localmente sul dispositivo.
+
+---
+
+## 👨‍💻 Autore
+
+**Stefano** - Sviluppo Full Stack & AI Integration
+
+---
+
+## 📄 Licenza
+
+Progetto proprietario. Tutti i diritti riservati.
+
+
+![Flutter](https://img.shields.io/badge/Flutter-3.38-blue?logo=flutter)
+![Python](https://img.shields.io/badge/Python-3.10+-green?logo=python)
+![MySQL](https://img.shields.io/badge/MySQL-8.0-orange?logo=mysql)
+![Gemini](https://img.shields.io/badge/Google_Gemini-AI-purple?logo=google)
 
 ---
 
