@@ -1,0 +1,38 @@
+# Fly.io deployment configuration
+# Deploy with: fly deploy
+
+app = "savy-api"
+primary_region = "fra"  # Frankfurt (EU)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ENVIRONMENT = "production"
+  MYSQL_PORT = "3306"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 200
+    soft_limit = 100
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/health"
+
+[deploy]
+  strategy = "rolling"
+
+# Configure secrets with:
+# fly secrets set MYSQL_HOST=xxx MYSQL_USER=xxx MYSQL_PASSWORD=xxx MYSQL_DATABASE=xxx JWT_SECRET=xxx GEMINI_API_KEY=xxx
+

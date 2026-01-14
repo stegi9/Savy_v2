@@ -1,0 +1,272 @@
+# SAVY - AI PERSONAL FINANCE COACH
+# Cursor AI Rules & Architectural Guidelines
+
+## PROJECT STRUCTURE
+- `/frontend`: Flutter application (Dart)
+- `/backend`: Python FastAPI + LangGraph agent system
+
+---
+
+## BACKEND RULES (Python + FastAPI + LangGraph)
+
+### 1. CORE PRINCIPLES
+- **Type Safety**: All functions must use Python type hints (PEP 484)
+- **Pydantic Models**: Use Pydantic v2 for all data validation and serialization
+- **Async First**: Prefer async/await for I/O operations (DB queries, HTTP calls, LLM invocations)
+- **No Placeholders**: Implement complete business logic, never use TODO or mock responses in production code
+
+### 2. LANGGRAPH PATTERNS
+```python
+# State definition (Pydantic + TypedDict)
+from typing import TypedDict
+from pydantic import BaseModel
+
+class AgentState(TypedDict):
+    balance: float
+    upcoming_bills: list[dict]
+    user_query: str
+    decision: str
+    reasoning: str
+    optimization_leads: list[dict]
+```
+
+### 3. GRAPH NODES
+- Each node must be a pure function: `def node_name(state: AgentState) -> AgentState`
+- Nodes should be stateless and testable in isolation
+- Use conditional edges for decision branching
+- Log all state transitions for debugging
+
+### 4. FILE ORGANIZATION (3-LAYER ARCHITECTURE)
+```
+/backend
+├── main.py                 # FastAPI app entry point
+├── config.py               # Environment variables (MySQL, Gemini keys)
+├── graph.py                # LangGraph StateGraph definition
+├── schemas.py              # Pydantic models (Request/Response)
+├── requirements.txt        # Python dependencies
+│
+├── api/                    # API Layer
+│   └── routes/             # FastAPI routers (controllers)
+│       ├── category_controller.py
+│       ├── chat_controller.py
+│       ├── report_controller.py
+│       └── optimization_controller.py
+│
+├── db/                     # Database Layer
+│   ├── database.py         # SQLAlchemy connection & session
+│   ├── mysql_schema.sql    # Database schema
+│   └── migrations/         # SQL migration scripts
+│
+├── models/                 # SQLAlchemy Models (ORM)
+│   ├── user.py
+│   ├── category.py
+│   ├── transaction.py
+│   ├── recurring_bill.py
+│   └── optimization_lead.py
+│
+├── repositories/           # Data Access Layer
+│   ├── base_repository.py
+│   ├── user_repository.py
+│   ├── category_repository.py
+│   └── ...
+│
+├── services/               # Business Logic Layer
+│   ├── category_service.py
+│   ├── chat_service.py
+│   ├── llm_service.py      # Google Gemini integration
+│   └── ...
+│
+├── nodes/                  # LangGraph Nodes
+│   ├── fetch_data.py
+│   ├── financial_analysis.py
+│   ├── coach_reasoning.py
+│   └── optimizer_check.py
+│
+├── utils/                  # Utilities
+│   ├── calculations.py
+│   └── logging_config.py
+│
+└── docs/                   # Documentation
+    └── SETUP.md
+```
+
+### 5. API DESIGN
+- RESTful endpoints: `/api/v1/...`
+- Database: MySQL with SQLAlchemy ORM
+- Request validation: Pydantic schemas for all POST bodies
+- Response format:
+```python
+{
+    "success": bool,
+    "data": {...},
+    "message": str | None
+}
+```
+
+### 6. DATABASE (MySQL + SQLAlchemy)
+- Use SQLAlchemy ORM for all database operations
+- Follow 3-layer pattern: Repository → Service → Controller
+- **Repository**: Data access (CRUD operations)
+- **Service**: Business logic (calculations, validations, LLM calls)
+- **Controller**: API endpoints (request/response handling)
+
+### 7. ERROR HANDLING
+- Use FastAPI HTTPException with appropriate status codes
+- Log all errors with context (user_id, operation, timestamp)
+- Never expose internal errors to the client
+- Use structlog for structured logging
+
+### 8. LLM BEST PRACTICES (Google Gemini)
+- Use structured output (JSON mode) for LLM responses
+- Implement retry logic with exponential backoff
+- Cache repeated queries where appropriate
+- Always include system prompts with role context
+- Use `langchain-google-genai` for Gemini integration
+
+---
+
+## FRONTEND RULES (Flutter + Riverpod)
+
+### 1. ARCHITECTURE: CLEAN ARCHITECTURE + FEATURE-FIRST
+```
+/lib
+├── main.dart
+├── app.dart                    # MaterialApp config
+├── core/
+│   ├── theme/                  # App theme, colors, typography
+│   ├── router/                 # Go_router navigation
+│   └── constants/              # API endpoints, asset paths
+├── features/
+│   ├── auth/
+│   │   ├── data/               # Repositories, DTOs
+│   │   ├── domain/             # Entities, use cases
+│   │   └── presentation/       # Screens, widgets, providers
+│   ├── chat/                   # Cocktail Check chat interface
+│   ├── dashboard/              # Home screen with balance
+│   ├── transactions/           # Transaction history
+│   └── optimization/           # 1-Click optimization UI
+└── shared/
+    ├── widgets/                # Reusable UI components
+    └── utils/                  # Helpers, extensions
+```
+
+### 2. STATE MANAGEMENT (RIVERPOD)
+- Use code generation (`riverpod_generator`, `freezed`)
+- Providers must be declared at the top level (global scope)
+- Naming convention:
+  - Data providers: `userDataProvider`
+  - Notifier providers: `chatNotifierProvider`
+  - FutureProviders for async operations
+
+### 3. DEPENDENCY INJECTION
+- All services (API clients, repositories) must be provided via Riverpod
+- Never instantiate services directly in widgets
+- Example:
+```dart
+@riverpod
+ApiClient apiClient(ApiClientRef ref) {
+  return ApiClient(baseUrl: AppConstants.apiBaseUrl);
+}
+```
+
+### 4. UI/UX STANDARDS
+- **Material Design 3**: Use Material 3 components
+- **Responsive**: Support mobile (primary), tablet, desktop
+- **Loading States**: Show skeleton loaders, not circular indicators
+- **Error Handling**: User-friendly messages with retry actions
+- **Accessibility**: Semantic labels for screen readers
+
+### 5. API COMMUNICATION
+- Use `dio` package for HTTP requests
+- Implement interceptors for:
+  - JWT token injection (from Supabase)
+  - Error handling (401 → logout, 500 → retry)
+  - Request/response logging (dev mode only)
+
+### 6. MODELS & SERIALIZATION
+- Use `freezed` for immutable data classes
+- Use `json_serializable` for JSON parsing
+- Never use dynamic types in models
+
+### 7. TESTING STRATEGY
+- Unit tests for business logic (repositories, use cases)
+- Widget tests for UI components
+- Integration tests for critical flows (auth, chat)
+
+---
+
+## MySQL DATABASE SCHEMA
+
+### Main Tables
+- **profiles** - User profiles with balance and settings
+- **user_categories** - Custom spending categories
+- **transactions** - Financial transactions linked to categories
+- **recurring_bills** - Recurring bills (energy, telco, subscriptions)
+- **optimization_leads** - Optimization opportunities identified by AI
+- **partners** - Partner providers for optimization
+
+### Schema Location
+Full schema: `backend/db/mysql_schema.sql`
+Migrations: `backend/db/migrations/`
+
+### Key Features
+- UUID primary keys for all tables
+- Foreign keys with CASCADE delete
+- Timestamps (created_at, updated_at)
+- Decimal(10,2) for all monetary values
+- InnoDB engine with utf8mb4 charset
+
+---
+
+## DEVELOPMENT WORKFLOW
+1. **Local Development**:
+   - Backend: `uvicorn main:app --reload` (port 8000)
+   - Frontend: `flutter run`
+   - MySQL: Local instance (port 3306)
+
+2. **Environment Variables**:
+   - Backend: `.env` file (never commit) - see `backend/docs/SETUP.md`
+   - Frontend: `lib/core/constants/env.dart`
+
+3. **Git Strategy**:
+   - Branch naming: `feature/cocktail-check`, `fix/auth-token`
+   - Commits: Conventional Commits format
+   - No commits to `main` without PR
+
+4. **Code Quality**:
+   - Python: `black`, `ruff`, `mypy`
+   - Dart: `dart format`, `dart analyze`
+
+---
+
+## SECURITY CHECKLIST
+- [ ] User can only access their own data (enforce in repositories)
+- [ ] Environment variables never hardcoded (.env in .gitignore)
+- [ ] LLM prompts sanitized (no user input injection)
+- [ ] HTTPS only in production
+- [ ] MySQL connection uses SSL in production
+- [ ] API rate limiting implemented
+- [ ] Input validation with Pydantic schemas
+
+---
+
+## AI AGENT GUIDELINES (LANGGRAPH)
+- **Deterministic Nodes**: Data fetching and calculations must be deterministic
+- **Non-Deterministic Nodes**: LLM reasoning nodes can vary
+- **Conditional Logic**: Use `add_conditional_edges` for branching (e.g., "can afford" vs "cannot afford")
+- **Streaming**: Implement streaming responses for chat interface
+- **Persistence**: Save agent conversation history to Supabase
+
+---
+
+## LOGGING & MONITORING
+- Backend: Use `structlog` for structured logging
+- Frontend: Use `logger` package
+- Track metrics:
+  - API response times
+  - LLM token usage
+  - User engagement (messages sent, optimizations accepted)
+
+
+
+

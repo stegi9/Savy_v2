@@ -1,0 +1,43 @@
+# FastAPI & Server
+fastapi==0.115.5
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# Pydantic & Validation
+pydantic==2.10.5
+pydantic-settings==2.7.1
+
+# Database (MySQL)
+sqlalchemy>=2.0.0
+pymysql>=1.1.0
+alembic>=1.13.0
+
+# LangChain & LangGraph  
+langchain>=0.3.0
+langchain-google-genai>=2.0.0
+langchain-community>=0.3.0
+langgraph>=0.2.0
+
+# AI/LLM (Google Gemini)
+google-genai>=1.56.0
+
+# Auth & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+pyjwt==2.8.0
+python-dotenv==1.0.1
+
+# Logging & Monitoring
+structlog==24.4.0
+
+# HTTP Client
+httpx>=0.28.1
+
+# Date/Time
+python-dateutil==2.9.0.post0
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.2
+pytest-cov==6.0.0
+

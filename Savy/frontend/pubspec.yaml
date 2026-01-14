@@ -1,0 +1,80 @@
+name: savy_frontend
+description: Savy AI Personal Finance Coach - Flutter Frontend
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+
+  # Data Models
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
+
+  # Navigation
+  go_router: ^13.0.0
+
+  # HTTP & API
+  dio: ^5.4.0
+  url_launcher: ^6.2.4
+
+  # Supabase
+  supabase_flutter: ^2.0.0
+
+  # Secure Storage
+  flutter_secure_storage: ^9.0.0
+
+  # UI
+  google_fonts: ^6.1.0
+  flutter_svg: ^2.0.9
+  intl: ^0.18.1
+  fl_chart: ^0.66.0
+
+  # Notifications
+  # flutter_local_notifications: ^15.1.0  # TEMPORANEAMENTE DISABILITATO - Bug con Java 17
+  # TODO: Riabilitare quando il package sarà compatibile
+
+  # Onboarding
+  introduction_screen: ^3.1.12
+
+  # Preferences
+  shared_preferences: ^2.2.2
+
+  # Utilities
+  logger: ^2.0.2
+  equatable: ^2.0.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Code Generation
+  riverpod_generator: ^2.3.9
+  build_runner: ^2.4.7
+  freezed: ^2.4.6
+  json_serializable: ^6.7.1
+
+  # Linting
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+
+  # Assets
+  # assets:
+  #   - assets/images/
+  #   - assets/icons/
+
+  # fonts:
+  #   - family: CustomFont
+  #     fonts:
+  #       - asset: fonts/CustomFont-Regular.ttf
+
+
