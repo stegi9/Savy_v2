@@ -7,6 +7,17 @@ from .transaction import Transaction
 from .recurring_bill import RecurringBill
 from .optimization_lead import OptimizationLead
 from .partner import Partner
+from .job import BackgroundJob
+from .affiliate import (
+    AffiliatePartner, 
+    AffiliateOffer, 
+    OfferTrigger, 
+    OfferSearchTerm, 
+    UserPlacementState, 
+    UserOfferState, 
+    UserRecommendation, 
+    AffiliateInteraction
+)
 
 __all__ = [
     "User",
@@ -14,5 +25,14 @@ __all__ = [
     "Transaction",
     "RecurringBill",
     "OptimizationLead",
-    "Partner"
+    "Partner",
+    "BackgroundJob",
+    "AffiliatePartner",
+    "AffiliateOffer",
+    "OfferTrigger",
+    "OfferSearchTerm",
+    "UserPlacementState",
+    "UserOfferState",
+    "UserRecommendation",
+    "AffiliateInteraction",
 ]

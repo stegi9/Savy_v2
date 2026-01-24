@@ -11,33 +11,36 @@ from repositories.user_repository import UserRepository
 from utils.security import decode_access_token
 from models.user import User
 
-# HTTP Bearer token scheme
-security = HTTPBearer()
+# HTTP Bearer token scheme (auto_error=False to handle 401 manually)
+security = HTTPBearer(auto_error=False)
 
+
+import structlog
+
+logger = structlog.get_logger()
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
     """
     Dependency to get the current authenticated user from JWT token.
-    
-    Args:
-        credentials: HTTP Bearer token from Authorization header
-        db: Database session
-        
-    Returns:
-        User object if authentication is successful
-        
-    Raises:
-        HTTPException: If token is invalid or user not found
     """
+    if not credentials:
+        logger.warning("auth_failed_no_credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     token = credentials.credentials
     
     # Decode JWT token
     user_id = decode_access_token(token)
     
     if user_id is None:
+        logger.warning("auth_failed_invalid_token", token_preview=token[:10] + "...")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
@@ -49,6 +52,7 @@ async def get_current_user(
     user = user_repo.get_by_id(user_id)
     
     if user is None:
+        logger.warning("auth_failed_user_not_found", user_id=user_id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",

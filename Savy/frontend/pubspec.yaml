@@ -24,6 +24,7 @@ dependencies:
   # HTTP & API
   dio: ^5.4.0
   url_launcher: ^6.2.4
+  visibility_detector: ^0.4.0+2
 
   # Supabase
   supabase_flutter: ^2.0.0

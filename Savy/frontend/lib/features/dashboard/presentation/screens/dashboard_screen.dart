@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/app_providers.dart';
+import 'package:savy_frontend/features/affiliate/presentation/widgets/smart_suggestion_card.dart';
+import 'package:savy_frontend/features/affiliate/presentation/providers/affiliate_provider.dart';
 
 import 'package:savy_frontend/core/l10n/app_strings.dart';
 
@@ -62,6 +64,7 @@ class DashboardScreen extends ConsumerWidget {
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(dashboardDataProvider);
+        ref.invalidate(dashboardRecommendationProvider);
       },
       child: CustomScrollView(
         slivers: [
@@ -142,6 +145,10 @@ class DashboardScreen extends ConsumerWidget {
                   budget: monthlyBudget,
                   reportData: reportData,
                 ),
+                const SizedBox(height: 16),
+
+                // Affiliate Suggestion
+                const SmartSuggestionCard(),
                 const SizedBox(height: 16),
 
                 // Quick Actions

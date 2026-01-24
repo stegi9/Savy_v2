@@ -272,17 +272,17 @@ class _DeepDiveScreenState extends ConsumerState<DeepDiveScreen> {
           segments: [
             ButtonSegment(
               value: 0,
-              label: Text(AppStrings.get('distribution')),
+              label: FittedBox(child: Text(AppStrings.get('distribution'), maxLines: 1)),
               icon: const Icon(Icons.pie_chart, size: 18),
             ),
             ButtonSegment(
               value: 1,
-              label: Text(AppStrings.get('trend')),
+              label: FittedBox(child: Text(AppStrings.get('trend'), maxLines: 1)),
               icon: const Icon(Icons.show_chart, size: 18),
             ),
             ButtonSegment(
               value: 2,
-              label: Text(AppStrings.get('comparison')),
+              label: FittedBox(child: Text(AppStrings.get('comparison'), maxLines: 1)),
               icon: const Icon(Icons.bar_chart, size: 18),
             ),
           ],

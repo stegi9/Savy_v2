@@ -141,6 +141,10 @@ class AppStrings {
       'currentPeriod': 'Periodo Corrente',
       'previousPeriod': 'Periodo Precedente',
       'periodComparison': 'Confronto Periodi',
+      'expensesByCategory': 'Spese per Categoria',
+      'advancedAnalytics': 'Analisi Avanzata',
+      'selectIcon': 'Seleziona Icona',
+      'selectColor': 'Seleziona Colore',
     },
     'en': {
       // ... previous en keys ...

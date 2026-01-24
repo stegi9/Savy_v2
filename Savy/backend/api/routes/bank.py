@@ -13,6 +13,12 @@ from models.user import User
 from models.category import UserCategory
 from schemas import BankInstitution, BankLinkResponse, StandardResponse
 from api.routes.auth_controller import get_current_user
+from utils.job_queue import DbJobQueue
+import json
+
+logger = structlog.get_logger()
+router = APIRouter(prefix="/banks", tags=["Bank Integration"])
+banking_service = BankingService()
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/banks", tags=["Bank Integration"])
@@ -172,6 +178,19 @@ async def sync_bank_data(
                     new_tx_count += 1
                 
                 db.commit()
+                if new_tx_count > 0:
+                     # Trigger Affiliate Worker
+                     try:
+                         # We queue for the user, logic will fetch recent txs or we pass IDs if needed
+                         # Passing user_id is safer/simpler for now
+                         queue = DbJobQueue(db)
+                         queue.enqueue(
+                             task_name="match_affiliate_offers", 
+                             payload={"user_id": current_user.id}
+                         )
+                     except Exception as e:
+                         logger.error("affiliate_queue_fail", error=str(e))
+
         
         return StandardResponse(success=True, message="Sync completed successfully")
 

@@ -35,7 +35,8 @@ async def coach_reasoning(state: Dict[str, Any]) -> Dict[str, Any]:
         # Use LLM for intelligent reasoning
         from services.llm_service import get_financial_advice
         
-        result = await get_financial_advice(user_query, analysis)
+        user_id = state.get("user_id")
+        result = await get_financial_advice(user_query, analysis, user_id)
         
         state["decision"] = result.get("decision", "caution")
         state["reasoning"] = result.get("reasoning", "Non riesco ad analizzare la tua situazione.")

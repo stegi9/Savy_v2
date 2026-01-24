@@ -8,7 +8,7 @@ import structlog
 
 from config import settings
 from db.database import init_db, get_db
-from api.routes import auth_router, category_router, chat_router, report_router, optimization_router, transaction_router, user_router, bill_router, deep_dive_router, bank_router
+from api.routes import auth_router, category_router, chat_router, report_router, optimization_router, transaction_router, user_router, bill_router, deep_dive_router, bank_router, affiliate_controller
 from schemas import HealthResponse
 
 # Configure structured logging
@@ -107,6 +107,7 @@ app.include_router(user_router, prefix=settings.api_v1_prefix)
 app.include_router(bill_router, prefix=settings.api_v1_prefix)
 app.include_router(deep_dive_router, prefix=settings.api_v1_prefix)
 app.include_router(bank_router, prefix=settings.api_v1_prefix)
+app.include_router(affiliate_controller.router, prefix=settings.api_v1_prefix)
 
 
 # ============================================================================

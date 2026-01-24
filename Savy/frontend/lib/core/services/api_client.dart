@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 // Import BankInstitution
 
+import 'package:savy_frontend/core/services/storage_helper.dart';
+
 /// Centralized API client for all backend communication
 class ApiClient {
   final Dio _dio;
@@ -10,7 +12,7 @@ class ApiClient {
   ApiClient({
     required String baseUrl,
     FlutterSecureStorage? storage,
-  })  : _storage = storage ?? const FlutterSecureStorage(),
+  })  : _storage = storage ?? StorageHelper.instance,
         _dio = Dio(BaseOptions(
           baseUrl: baseUrl,
           connectTimeout: const Duration(seconds: 10),
@@ -23,45 +25,44 @@ class ApiClient {
     _setupInterceptors();
   }
 
+  String get baseUrl => _dio.options.baseUrl;
+
+  Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) async {
+    return _dio.get(path, queryParameters: queryParameters);
+  }
+
+  Future<Response> post(String path, {Object? data, Map<String, dynamic>? queryParameters}) async {
+    return _dio.post(path, data: data, queryParameters: queryParameters);
+  }
+
   void _setupInterceptors() {
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         // Inject JWT token
+        print('[ApiClient] reading token from storage...');
         final token = await _storage.read(key: 'access_token');
-        if (token != null) {
+        
+        if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
+          print('[ApiClient] ✅ TOKEN FOUND and injected into headers.');
+          // Safely print substring
+          final authHeader = options.headers['Authorization'] as String;
+          final preview = authHeader.length > 15 ? authHeader.substring(0, 15) : authHeader;
+          print('[ApiClient] Header Value: $preview...');
+        } else {
+          print('[ApiClient] ❌ NO TOKEN FOUND in storage (or empty).');
         }
-        print('*** Request ***');
-        print('uri: ${options.uri}');
-        print('method: ${options.method}');
-        print('headers:');
-        options.headers.forEach((k, v) {
-          if (k.toLowerCase() != 'authorization') {
-            print(' $k: $v');
-          } else {
-            print(' $k: Bearer ${token?.substring(0, 20)}...');
-          }
-        });
-        print('data:');
-        print(options.data);
+        
+        print('[ApiClient] Request URI: ${options.uri}');
         return handler.next(options);
       },
       onResponse: (response, handler) {
-        print('');
-        print('*** Response ***');
-        print('uri: ${response.requestOptions.uri}');
-        print('statusCode: ${response.statusCode}');
-        print('headers:');
-        response.headers.forEach((k, v) => print(' $k: ${v.join(", ")}'));
-        print('Response Text:');
-        print(response.data);
+        print('[ApiClient] Response Status: ${response.statusCode}');
         return handler.next(response);
       },
       onError: (error, handler) async {
-        print('*** Error ***');
-        print('uri: ${error.requestOptions.uri}');
-        print('statusCode: ${error.response?.statusCode}');
-        print('message: ${error.message}');
+        print('[ApiClient] ❌ Request Error: ${error.message}');
+        print('[ApiClient] Error Status: ${error.response?.statusCode}');
 
         // Handle 401 (token expired)
         if (error.response?.statusCode == 401) {

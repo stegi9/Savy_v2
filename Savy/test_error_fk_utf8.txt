@@ -1,0 +1,230 @@
+﻿2026-01-17 14:13:05 [info     ] database_url_configured        url=mysql+pymysql:****@localhost:3306/savy_db
+./backend/venv/Script
+s/python.exe : 
+Traceback (most 
+recent call last):
+In riga:1 car:28
++ ... ="backend"; ./b
+ackend/venv/Scripts/p
+ython.exe backend/tes
+ts/test_affi ...
++                 ~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (Traceba   
+ ck (most recent     
+call last)::Stri    
+ng) [], RemoteEx    
+ception
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+  File "C:\Users\stef
+a\Desktop\Savy-Antigr
+avity\Savy\backend\te
+sts\test_affiliate_fl
+ow.py", line 161, in 
+<module>
+    with 
+db_session_cm() as 
+sess:
+         
+~~~~~~~~~~~~~^^
+  File "C:\Users\stef
+a\AppData\Local\Progr
+ams\Python\Python313\
+Lib\contextlib.py", 
+line 141, in 
+__enter__
+    return 
+next(self.gen)
+  File "C:\Users\stef
+a\Desktop\Savy-Antigr
+avity\Savy\backend\te
+sts\test_affiliate_fl
+ow.py", line 51, in 
+db_session_cm
+    Base.metadata.cre
+ate_all(bind=engine)
+    ~~~~~~~~~~~~~~~~~
+~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\stef
+a\Desktop\Savy-Antigr
+avity\Savy\backend\ve
+nv\Lib\site-packages\
+sqlalchemy\sql\schema
+.py", line 5928, in 
+create_all
+    bind._run_ddl_vis
+itor(
+    ~~~~~~~~~~~~~~~~~
+~~~~^
+        
+ddl.SchemaGenerator, 
+self, checkfirst=chec
+kfirst, tables=tables
+        ^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^
+    )
+    ^
+  File "C:\Users\stef
+a\Desktop\Savy-Antigr
+avity\Savy\backend\ve
+nv\Lib\site-packages\
+sqlalchemy\engine\bas
+e.py", line 3260, in 
+_run_ddl_visitor
+    conn._run_ddl_vis
+itor(visitorcallable,
+ element, **kwargs)
+    ~~~~~~~~~~~~~~~~~
+~~~~^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stef
+a\Desktop\Savy-Antigr
+avity\Savy\backend\ve
+nv\Lib\site-packages\
+sqlalchemy\engine\bas
+e.py", line 2467, in 
+_run_ddl_visitor
+    ).traverse_single
+(element)
+      ~~~~~~~~~~~~~~~
+^^^^^^^^^
+  File "C:\Users\stef
+a\Desktop\Savy-Antigr
+avity\Savy\backend\ve
+nv\Lib\site-packages\
+sqlalchemy\sql\visito
+rs.py", line 661, in 
+traverse_single
+    return meth(obj, 
+**kw)
+  File "C:\Users\stef
+a\Desktop\Savy-Antigr
+avity\Savy\backend\ve
+nv\Lib\site-packages\
+sqlalchemy\sql\ddl.py
+", line 962, in 
+visit_metadata
+    collection = sort
+_tables_and_constrain
+ts(
+        [t for t in 
+tables if self._can_c
+reate_table(t)]
+    )
+  File "C:\Users\stef
+a\Desktop\Savy-Antigr
+avity\Savy\backend\ve
+nv\Lib\site-packages\
+sqlalchemy\sql\ddl.py
+", line 1394, in sort
+_tables_and_constrain
+ts
+    dependent_on = 
+fkc.referred_table
+                   
+^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stef
+a\Desktop\Savy-Antigr
+avity\Savy\backend\ve
+nv\Lib\site-packages\
+sqlalchemy\sql\schema
+.py", line 4799, in 
+referred_table
+    return self.eleme
+nts[0].column.table
+           ^^^^^^^^^^
+^^^^^^^^^^^^^
+  File "C:\Users\stef
+a\Desktop\Savy-Antigr
+avity\Savy\backend\ve
+nv\Lib\site-packages\
+sqlalchemy\util\langh
+elpers.py", line 
+1226, in __get__
+    obj.__dict__[self
+.__name__] = result 
+= self.fget(obj)
+                     
+                     
+ ~~~~~~~~~^^^^^
+  File "C:\Users\stef
+a\Desktop\Savy-Antigr
+avity\Savy\backend\ve
+nv\Lib\site-packages\
+sqlalchemy\sql\schema
+.py", line 3199, in 
+column
+    return self._reso
+lve_column()
+           ~~~~~~~~~~
+~~~~~~~~~~^^
+  File "C:\Users\stef
+a\Desktop\Savy-Antigr
+avity\Savy\backend\ve
+nv\Lib\site-packages\
+sqlalchemy\sql\schema
+.py", line 3222, in 
+_resolve_column
+    raise exc.NoRefer
+encedTableError(
+    ...<5 lines>...
+    )
+sqlalchemy.exc.NoRefe
+rencedTableError: 
+Foreign key 
+associated with 
+column 'transactions.
+bank_account_id' 
+could not find table 
+'bank_accounts' with 
+which to generate a 
+foreign key to 
+target column 'id'
+
+During handling of 
+the above exception, 
+another exception 
+occurred:
+
+Traceback (most 
+recent call last):
+  File "C:\Users\stef
+a\Desktop\Savy-Antigr
+avity\Savy\backend\te
+sts\test_affiliate_fl
+ow.py", line 165, in 
+<module>
+    print(f"\nTEST 
+FAILED \u274c: {e}")
+    ~~~~~^^^^^^^^^^^^
+^^^^^^^^^^^^^^
+  File "C:\Users\stef
+a\AppData\Local\Progr
+ams\Python\Python313\
+Lib\encodings\cp1252.
+py", line 19, in 
+encode
+    return codecs.cha
+rmap_encode(input,sel
+f.errors,encoding_tab
+le)[0]
+           ~~~~~~~~~~
+~~~~~~~~~~~^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
+^^^
+UnicodeEncodeError: 
+'charmap' codec 
+can't encode 
+character '\u274c' 
+in position 14: 
+character maps to 
+<undefined>

@@ -4,9 +4,14 @@ LLM service for AI-powered financial coaching using Google Gemini.
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 import structlog
-from typing import Dict, Any
+from typing import Dict, Any, List
 import json
 from config import settings
+
+from models.affiliate import OfferSearchTerm, AffiliateOffer, OfferStatus, PlacementType
+from sqlalchemy import select, or_
+from services.affiliate_redirect_service import AffiliateRedirectService
+from db.database import SessionLocal
 
 logger = structlog.get_logger()
 
@@ -28,7 +33,8 @@ def get_llm_client() -> ChatGoogleGenerativeAI:
 
 async def get_financial_advice(
     user_query: str,
-    analysis_result: Dict[str, Any]
+    analysis_result: Dict[str, Any],
+    user_id: str = None
 ) -> Dict[str, str]:
     """
     Gets financial advice from LLM based on user query and analysis.
@@ -45,6 +51,21 @@ async def get_financial_advice(
     try:
         llm = get_llm_client()
         
+        # 0. Check for Affiliate Offers (Tool Usage)
+        affiliate_context = ""
+        offers = []
+        if user_id:
+            try:
+                # Naive Keyword Extraction for Tool (MVP)
+                # In robust version, LLM decides to call tool. Here we pre-fetch if query implies "spending/saving".
+                # Simplify: pass whole query to tool, let SQL LIKE handle it.
+                offers = search_affiliate_products(user_query, user_id=user_id)
+                if offers:
+                    offers_text = "\\n".join([f"- {o['title']} (Prezzo: {o['price']}) -> TOKEN: {o['link_token']}" for o in offers])
+                    affiliate_context = f"\\n\\nDATI CONTESTUALI (AFFILIATE_OFFERS):\\n{offers_text}\\n(Usa questi token per i link, non inventare URL)"
+            except Exception as tool_e:
+                logger.warning("affiliate_tool_failed", error=str(tool_e))
+
         # Build system prompt
         system_prompt = """
         Sei Savy, un coach finanziario personale AI esperto e onesto.
@@ -55,7 +76,17 @@ async def get_financial_advice(
         - Se l'utente chiede di spendere un importo MAGGIORE del suo saldo disponibile, devi rispondere "not_affordable"
         - Estrai l'importo dalla domanda dell'utente (es: "1000 euro", "€500", "cinquecento euro")
         - Confronta l'importo richiesto con: (Saldo attuale - Bollette da pagare)
+        - Confronta l'importo richiesto con: (Saldo attuale - Bollette da pagare)
         - Sii ONESTO e DIRETTO, non dare false speranze
+        
+        PARTNER & OFFERTE:
+        - Se l'utente chiede consigli su prodotti/servizi (es. "cambio luce", "offerta internet", "comprare cuffie"), 
+          DEVI usare i dati forniti nel contesto chiamati "AFFILIATE_OFFERS".
+        - Se ci sono offerte, presentale con TITOLO e PREZZO. 
+        - NON inventare link. Usa solo quelli forniti nel tool.
+        - Se non ci sono offerte nel contesto, dì "Al momento non ho partner per questa richiesta".
+        
+        Rispondi in modo:
         
         Rispondi in modo:
         - Chiaro e matematicamente corretto
@@ -66,8 +97,8 @@ async def get_financial_advice(
         Rispondi SOLO con un JSON valido in questo formato:
         {
             "decision": "affordable" | "caution" | "not_affordable",
-            "reasoning": "Spiegazione dettagliata con calcoli matematici corretti",
-            "suggestion": "Consiglio alternativo opzionale"
+            "reasoning": "Spiegazione dettagliata con calcoli matematici corretti.",
+            "suggestion": "Consiglio alternativo opzionale. Se c'è un'offerta pertinente, scrivila qui usando il token."
         }
         """
         
@@ -90,6 +121,7 @@ async def get_financial_advice(
         5. Altrimenti → decision: "affordable"
         
         Fornisci il tuo consiglio in formato JSON con calcoli matematici corretti.
+        {affiliate_context}
         """
         
         messages = [
@@ -330,4 +362,55 @@ Rispondi con il JSON contenente l'ID e nome della categoria scelta.
             "reasoning": f"Errore AI: {str(e)}"
         }
 
+
+def search_affiliate_products(query: str, user_id: str = None, filters: Dict[str, Any] = None) -> List[Dict]:
+    """
+    Search for affiliate products (Tool for LLM).
+    Returns list of offers with secure tokens.
+    """
+    if not user_id: 
+        return []
+        
+    logger.info("llm_tool_search_affiliate", query=query, user_id=user_id)
+    
+    # Extract keywords from query (Naive Split) mostly for LIKE
+    # Better: Use query as is if SQL LIKE %query%
+    
+    with SessionLocal() as db:
+        # Simple search implementation (LIKE for MVP, FULLTEXT in Prod)
+        # Using joins to get offers
+        stmt = (
+            select(AffiliateOffer)
+            .join(OfferSearchTerm)
+            .where(
+                AffiliateOffer.status == OfferStatus.PUBLISHED,
+                OfferSearchTerm.term.like(f"%{query}%") 
+            )
+            .distinct()
+            .limit(3)
+        )
+        
+        offers = db.execute(stmt).scalars().all()
+        
+        results = []
+        redirect_service = AffiliateRedirectService(db)
+        
+        for offer in offers:
+            # Generate Token (Chat Placement)
+            raw_token, public_id = redirect_service.generate_token(
+                user_id=str(user_id), # UUID string
+                offer_id=offer.id,
+                placement=PlacementType.CHAT,
+                score=100.0, # High score for explicit search
+                reason_code="CHAT_SEARCH"
+            )
+            
+            results.append({
+                "title": offer.title,
+                "price": f"€{offer.min_amount:.2f}" if offer.min_amount else "N/A",
+                "link_token": raw_token,
+                "image_url": offer.image_url
+            })
+
+    return results
 

@@ -5,9 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/services/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 
-final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient(baseUrl: 'http://10.0.2.2:8000/api/v1');
-});
+import '../../../../core/providers/app_providers.dart';
+import '../../../../core/services/storage_helper.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -16,13 +15,14 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
+
 class _LoginScreenState extends ConsumerState<LoginScreen>
     with SingleTickerProviderStateMixin {
-  final _emailController = TextEditingController(text: 'demo@savy.app');
-  final _passwordController = TextEditingController(text: 'password123');
+  final _emailController = TextEditingController(text: 'stegi@gmail.com');
+  final _passwordController = TextEditingController(text: 'ciaociao1234');
   bool _isLoading = false;
   bool _isRegisterMode = false;
-  final _storage = const FlutterSecureStorage();
+  final _storage = StorageHelper.instance;
   final _nameController = TextEditingController();
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
@@ -68,11 +68,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         _emailController.text,
         _passwordController.text,
       );
-
       await _storage.write(
         key: 'access_token',
         value: response['access_token'],
       );
+      
+      // Verify token is written
+      final verify = await _storage.read(key: 'access_token');
+      if (verify == null) {
+         throw Exception("Secure Storage Write Failed");
+      }
+      print("[Login] Token written successfully: ${verify.substring(0, 10)}...");
+
+      print("[Login] Token written successfully: ${verify.substring(0, 10)}...");
+
+      // Invalidate providers to force refresh with new token
+      ref.invalidate(dashboardDataProvider);
+      
+      // Delay to ensure storage propagation?
+      await Future.delayed(const Duration(milliseconds: 500));
 
       if (mounted) {
         context.go('/dashboard');
@@ -117,6 +131,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       if (mounted) {
         _showSnackBar('Account creato con successo!', isError: false);
         await Future.delayed(const Duration(milliseconds: 500));
+        
+        // Invalidate providers
+        ref.invalidate(dashboardDataProvider);
+        
         context.go('/dashboard');
       }
     } catch (e) {
