@@ -33,6 +33,13 @@
 - **Spese Ricorrenti**: Gestione bollette e abbonamenti con scadenze.
 - **Categorie Personalizzate**: Crea categorie con colori unici ed icone dedicate.
 
+### 🛍️ Smart Savings & Affiliate Aggregator (Nuovo!)
+Savy evolve in un aggregatore universale di offerte. Per ogni categoria di spesa, l'app identifica proattivamente opportunità di risparmio:
+- **Verticali Coperti**: Bollette, Shopping (Amazon), Viaggi, Hotel, Benzina, Spesa, Telefonia Mobile, e altro.
+- **Interazione via Chat**: Chiedi al Coach *"Trovami l'offerta migliore per un hotel a Roma"* o *"Voglio risparmiare sulla bolletta luce"*.
+- **Vantaggio Doppio**: L'utente ottiene sconti esclusivi o prezzi migliori; la piattaforma genera revenue tramite affiliazione sicura.
+- **Offerte Contestuali**: Suggerimenti automatici basati sulle tue transazioni recenti (es. hai speso tanto in benzina? Ecco un cashback).
+
 ---
 
 ## 🏗️ Architettura
