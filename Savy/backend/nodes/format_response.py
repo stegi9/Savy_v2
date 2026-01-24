@@ -31,7 +31,8 @@ async def format_response(state: Dict[str, Any]) -> Dict[str, Any]:
             "role": "assistant",
             "content": state.get("reasoning", ""),
             "decision": state.get("decision", ""),
-            "optimization_leads_count": len(state.get("optimization_leads", []))
+            "optimization_leads_count": len(state.get("optimization_leads", [])),
+            "affiliate_offers": state.get("affiliate_offers", []) # ADDED
         }
         
         messages = state.get("messages", [])

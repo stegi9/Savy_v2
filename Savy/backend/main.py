@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 import structlog
 
 from config import settings
-from db.database import init_db, get_db
+from db.database import init_db
 from api.routes import auth_router, category_router, chat_router, report_router, optimization_router, transaction_router, user_router, bill_router, deep_dive_router, bank_router, affiliate_controller
 from schemas import HealthResponse
 

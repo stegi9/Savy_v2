@@ -34,95 +34,71 @@ def get_llm_client() -> ChatGoogleGenerativeAI:
 async def get_financial_advice(
     user_query: str,
     analysis_result: Dict[str, Any],
-    user_id: str = None
+    affiliate_offers: List[Dict] = None # Injected from AffiliateNode
 ) -> Dict[str, str]:
     """
     Gets financial advice from LLM based on user query and analysis.
-    
-    Args:
-        user_query: User's financial question
-        analysis_result: Financial analysis data
-        
-    Returns:
-        Dict with 'decision' and 'reasoning' keys
     """
     logger.info("llm_request_started", query=user_query)
     
     try:
         llm = get_llm_client()
         
-        # 0. Check for Affiliate Offers (Tool Usage)
+        # 0. Format Affiliate Context (if any)
         affiliate_context = ""
-        offers = []
-        if user_id:
-            try:
-                # Naive Keyword Extraction for Tool (MVP)
-                # In robust version, LLM decides to call tool. Here we pre-fetch if query implies "spending/saving".
-                # Simplify: pass whole query to tool, let SQL LIKE handle it.
-                offers = search_affiliate_products(user_query, user_id=user_id)
-                if offers:
-                    offers_text = "\\n".join([f"- {o['title']} (Prezzo: {o['price']}) -> TOKEN: {o['link_token']}" for o in offers])
-                    affiliate_context = f"\\n\\nDATI CONTESTUALI (AFFILIATE_OFFERS):\\n{offers_text}\\n(Usa questi token per i link, non inventare URL)"
-            except Exception as tool_e:
-                logger.warning("affiliate_tool_failed", error=str(tool_e))
+        if affiliate_offers:
+            offers_text = "\\n".join([f"- {o['title']} ({o['price']}) - {o['badge'] or ''}" for o in affiliate_offers])
+            affiliate_context = (
+                f"\\n\\n[A TUA DISPOSIZIONE NELLA UI]\\n"
+                f"Ho trovato le seguenti offerte partner pertinenti che verranno mostrate come card interattive:\\n{offers_text}\\n"
+                f"Nel messaggio, NON inventare link. Dì 'Ho trovato queste offerte per te:' e lascia che l'utente clicchi sulle card."
+            )
 
-        # Build system prompt
-        system_prompt = """
-        Sei Savy, un coach finanziario personale AI esperto e onesto.
-        
-        Il tuo compito è analizzare la domanda dell'utente e confrontarla con la sua situazione finanziaria REALE.
-        
-        IMPORTANTE:
-        - Se l'utente chiede di spendere un importo MAGGIORE del suo saldo disponibile, devi rispondere "not_affordable"
-        - Estrai l'importo dalla domanda dell'utente (es: "1000 euro", "€500", "cinquecento euro")
-        - Confronta l'importo richiesto con: (Saldo attuale - Bollette da pagare)
-        - Confronta l'importo richiesto con: (Saldo attuale - Bollette da pagare)
-        - Sii ONESTO e DIRETTO, non dare false speranze
-        
-        PARTNER & OFFERTE:
-        - Se l'utente chiede consigli su prodotti/servizi (es. "cambio luce", "offerta internet", "comprare cuffie"), 
-          DEVI usare i dati forniti nel contesto chiamati "AFFILIATE_OFFERS".
-        - Se ci sono offerte, presentale con TITOLO e PREZZO. 
-        - NON inventare link. Usa solo quelli forniti nel tool.
-        - Se non ci sono offerte nel contesto, dì "Al momento non ho partner per questa richiesta".
-        
-        Rispondi in modo:
-        
-        Rispondi in modo:
-        - Chiaro e matematicamente corretto
-        - Empatico ma realistico
-        - Orientato all'azione
-        - In italiano
-        
-        Rispondi SOLO con un JSON valido in questo formato:
-        {
-            "decision": "affordable" | "caution" | "not_affordable",
-            "reasoning": "Spiegazione dettagliata con calcoli matematici corretti.",
-            "suggestion": "Consiglio alternativo opzionale. Se c'è un'offerta pertinente, scrivila qui usando il token."
-        }
-        """
+        # Build system prompt - Enhanced AI Coach
+        system_prompt = """Sei Savy, il tuo coach finanziario personale AI. Sei esperto, empatico e PROATTIVO nel trovare modi per risparmiare.
+
+PERSONALITÀ:
+- Parli in modo amichevole ma professionale, come un consulente finanziario di fiducia
+- Sei onesto ma incoraggiante - non solo "no", ma "ecco cosa potresti fare"
+- Quando l'utente vuole comprare qualcosa, lo aiuti a capire SE può permetterselo e COME risparmiare
+
+ANALISI FINANZIARIA:
+1. Estrai l'importo dalla domanda (anche se implicito: "iPhone" ≈ €800-1200)
+2. Confronta con: Saldo disponibile DOPO bollette
+3. Calcola quanto rimarrebbe dopo l'acquisto
+
+DECISIONI:
+- "affordable": Può permetterselo senza problemi (rimangono >€500)
+- "caution": Fattibile ma richiede attenzione (rimangono €100-500)
+- "not_affordable": Non consigliato (rimarrebbe <€100 o in negativo)
+
+OFFERTE PARTNER:
+- Se vedi [OFFERTE DISPONIBILI], significa che sotto appariranno card cliccabili
+- Menzionale NATURALMENTE: "Ho trovato alcune opzioni per te:" o "Ecco cosa ho trovato..."
+- NON inventare link, NON mettere URL nel testo
+
+STILE RISPOSTA:
+- Breve ma completo (max 3-4 frasi)
+- Usa emoji con moderazione per rendere il testo più leggibile
+- Mostra i calcoli chiave
+
+Rispondi SOLO con JSON valido (no markdown):
+{"decision": "...", "reasoning": "...", "suggestion": "..."}
+"""
         
         # Build human prompt with context
-        human_prompt = f"""
-        L'utente chiede: "{user_query}"
-        
-        Situazione finanziaria ATTUALE:
-        - Saldo corrente: €{analysis_result.get('current_balance', 0):.2f}
-        - Bollette da pagare questo mese: €{analysis_result.get('total_bills', 0):.2f}
-        - Saldo disponibile DOPO bollette: €{analysis_result.get('projected_balance', 0):.2f}
-        - Capacità di spesa giornaliera: €{analysis_result.get('daily_spending_capacity', 0):.2f}
-        - Rischio finanziario: {"Alto - sotto €200 disponibili" if analysis_result.get('at_risk') else "Medio - gestibile"}
-        
-        COMPITO:
-        1. Estrai l'importo dalla domanda dell'utente (se presente)
-        2. Confronta con il saldo disponibile (€{analysis_result.get('projected_balance', 0):.2f})
-        3. Se importo richiesto > saldo disponibile → decision: "not_affordable"
-        4. Se importo richiesto lascia < €100 → decision: "caution"
-        5. Altrimenti → decision: "affordable"
-        
-        Fornisci il tuo consiglio in formato JSON con calcoli matematici corretti.
-        {affiliate_context}
-        """
+        human_prompt = f"""Domanda utente: "{user_query}"
+
+💰 SITUAZIONE FINANZIARIA:
+- Saldo attuale: €{analysis_result.get('current_balance', 0):.2f}
+- Bollette in arrivo: €{analysis_result.get('total_bills', 0):.2f}
+- Disponibile dopo bollette: €{analysis_result.get('projected_balance', 0):.2f}
+- Budget giornaliero: €{analysis_result.get('daily_spending_capacity', 0):.2f}/giorno
+- Status: {"⚠️ ATTENZIONE - Fondi limitati" if analysis_result.get('at_risk') else "✅ Situazione gestibile"}
+
+{affiliate_context if affiliate_context else ""}
+
+Analizza la richiesta e rispondi con un JSON contenente decision, reasoning e suggestion."""
         
         messages = [
             SystemMessage(content=system_prompt),
@@ -147,9 +123,6 @@ async def get_financial_advice(
             return result
         except json.JSONDecodeError as je:
             logger.warning("llm_response_invalid_json", content=response.content, error=str(je))
-            
-            # Try to extract decision and reasoning from text
-            content = response.content
             
             # Simple extraction if JSON parsing fails
             if "not_affordable" in content.lower() or "non puoi" in content.lower() or "impossibile" in content.lower():
@@ -212,7 +185,7 @@ async def categorize_with_ai(
         llm = get_llm_client()
         
         # Build category list for prompt
-        categories_text = "\n".join([
+        categories_text = "\\n".join([
             f"- ID: {cat['id']} | Nome: {cat['name']}" 
             for cat in user_categories
         ])
@@ -361,56 +334,3 @@ Rispondi con il JSON contenente l'ID e nome della categoria scelta.
             "needs_review": True,
             "reasoning": f"Errore AI: {str(e)}"
         }
-
-
-def search_affiliate_products(query: str, user_id: str = None, filters: Dict[str, Any] = None) -> List[Dict]:
-    """
-    Search for affiliate products (Tool for LLM).
-    Returns list of offers with secure tokens.
-    """
-    if not user_id: 
-        return []
-        
-    logger.info("llm_tool_search_affiliate", query=query, user_id=user_id)
-    
-    # Extract keywords from query (Naive Split) mostly for LIKE
-    # Better: Use query as is if SQL LIKE %query%
-    
-    with SessionLocal() as db:
-        # Simple search implementation (LIKE for MVP, FULLTEXT in Prod)
-        # Using joins to get offers
-        stmt = (
-            select(AffiliateOffer)
-            .join(OfferSearchTerm)
-            .where(
-                AffiliateOffer.status == OfferStatus.PUBLISHED,
-                OfferSearchTerm.term.like(f"%{query}%") 
-            )
-            .distinct()
-            .limit(3)
-        )
-        
-        offers = db.execute(stmt).scalars().all()
-        
-        results = []
-        redirect_service = AffiliateRedirectService(db)
-        
-        for offer in offers:
-            # Generate Token (Chat Placement)
-            raw_token, public_id = redirect_service.generate_token(
-                user_id=str(user_id), # UUID string
-                offer_id=offer.id,
-                placement=PlacementType.CHAT,
-                score=100.0, # High score for explicit search
-                reason_code="CHAT_SEARCH"
-            )
-            
-            results.append({
-                "title": offer.title,
-                "price": f"€{offer.min_amount:.2f}" if offer.min_amount else "N/A",
-                "link_token": raw_token,
-                "image_url": offer.image_url
-            })
-
-    return results
-

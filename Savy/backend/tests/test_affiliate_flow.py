@@ -1,9 +1,11 @@
 import pytest
 import os
-from dotenv import load_dotenv
-
-# Load env (adjust path if needed)
-load_dotenv("backend/.env")
+try:
+    from dotenv import load_dotenv
+    # Load env (adjust path if needed)
+    load_dotenv("backend/.env")
+except ImportError:
+    pass # Fallback to mock defaults below
 # Mock missing critical keys for test if .env is incomplete or not loaded
 os.environ.setdefault("MYSQL_PASSWORD", "test")
 os.environ.setdefault("GEMINI_API_KEY", "test")

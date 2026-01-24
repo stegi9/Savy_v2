@@ -54,24 +54,17 @@ async def financial_analysis(state: Dict[str, Any]) -> Dict[str, Any]:
             "bills_breakdown": upcoming_bills
         }
         
-        state["analysis_result"] = analysis_result
-        
-        logger.info(
-            "financial_analysis_completed",
-            projected_balance=projected_balance,
-            at_risk=at_risk,
-            daily_capacity=daily_capacity
-        )
-        
-        return state
+        # Return ONLY the update, not the full state
+        return {"analysis_result": analysis_result}
         
     except Exception as e:
         logger.error("financial_analysis_failed", error=str(e))
-        state["analysis_result"] = {
-            "error": str(e),
-            "at_risk": True
+        return {
+            "analysis_result": {
+                "error": str(e),
+                "at_risk": True
+            }
         }
-        return state
 
 
 

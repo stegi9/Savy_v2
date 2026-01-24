@@ -1,223 +1,220 @@
 """
 Affiliate API Controller.
-Exposes endpoints for Recommendations, Interactions, and Redirects.
+Exposes endpoints for Universal Affiliate Engine (Search, Redirect, Postback).
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import select, desc
+from datetime import datetime
 import structlog
 from typing import List, Optional
-from datetime import datetime
 
 from db.database import get_db
 from api.routes.auth_controller import get_current_user
 from models.user import User
-from models.affiliate import (
-    UserRecommendation, 
-    AffiliateInteraction, 
-    PlacementType, 
-    InteractionType,
-    AffiliateOffer,
-    AffiliatePartner
-)
-from services.affiliate_redirect_service import AffiliateRedirectService
-from services.affiliate_matching_service import AffiliateMatchingService
+from models.tracking import AffiliateClickToken, AffiliateClickEvent, AffiliateConversion
+from services.affiliate.interfaces import AffiliateVertical, AffiliateContext, ScoredOffer
+from services.affiliate.aggregator import AffiliateAggregatorService
+from services.affiliate.providers.amazon_provider import AmazonProvider
+from services.affiliate.providers.travel_provider import TravelProvider
 from schemas import StandardResponse
 from pydantic import BaseModel
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/affiliate", tags=["Affiliate Advisor"])
 
-# Schemas
-class RecommendationRequest(BaseModel):
-    placement: str = "DASHBOARD"
-    max_items: int = 1
+# --- DEPENDENCIES ---
 
-class InteractionRequest(BaseModel):
-    public_id: str
-    event: str # IMPRESSION, DISMISS, CLICK
-    placement: Optional[str] = None
-    idempotency_key: Optional[str] = None
-    metadata: Optional[dict] = None
+def get_aggregator(db: Session = Depends(get_db)) -> AffiliateAggregatorService:
+    service = AffiliateAggregatorService(db)
+    # Register Providers (MVC Style - ideally this is done once at startup, 
+    # but for stateless request scope it's fine for MVP if lightweight)
+    service.register_provider(AmazonProvider())
+    service.register_provider(TravelProvider())
+    return service
 
-class RecommendationItem(BaseModel):
-    public_id: str
-    title: str
-    body: Optional[str]
-    action_token: str
-    score: float
-    image_url: Optional[str]
-    badge: Optional[str] = None
+# --- SCHEMAS ---
 
-class RecommendationResponse(BaseModel):
-    placement: str
-    ab_variant: str = "CONTROL"
-    items: List[RecommendationItem]
+class SearchRequest(BaseModel):
+    query: str
+    vertical: AffiliateVertical
+    limit: int = 3
+    context_overrides: Optional[dict] = None
 
-# Endpoints
+class SearchResponse(BaseModel):
+    results: List[ScoredOffer]
 
-@router.post("/recommendations", response_model=RecommendationResponse)
+# --- ENDPOINTS ---
+
+@router.post("/search", response_model=SearchResponse)
+async def search_offers(
+    req: SearchRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    aggregator: AffiliateAggregatorService = Depends(get_aggregator)
+):
+    """
+    Reactive Search: User explicitly asks for offers.
+    """
+    context = AffiliateContext(
+        user_id=str(current_user.id),
+        locale="it_IT", # Default for now until User model upgrade
+        keywords=req.query.split(),
+        merchant_name=None, 
+        transaction_amount=None 
+    )
+    
+    offers = await aggregator.search_offers(
+        vertical=req.vertical,
+        query=req.query,
+        context=context,
+        limit=req.limit
+    )
+    
+    return SearchResponse(results=offers)
+
+
+@router.post("/recommendations", response_model=SearchResponse)
 async def get_recommendations(
-    req: RecommendationRequest,
+    request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    aggregator: AffiliateAggregatorService = Depends(get_aggregator)
 ):
     """
-    Get contextual recommendations for the user.
-    Uses pre-calculated results from `user_recommendations` table.
+    Proactive Recommendations: Based on user profile/bills.
+    For MVP: Checks if user has high bills and recommends Energy offers.
     """
-    try:
-        # 1. Matching Service (Lazy Load / Verification)
-        # In a real heavy system, this is async worker only.
-        # For MVP, we might want to trigger a quick check if no recs exist?
-        # No, respect architecture: Worker populates, API reads.
-        
-        # 2. Fetch Active Recommendations
-        stmt = (
-            select(UserRecommendation, AffiliateOffer)
-            .join(AffiliateOffer, UserRecommendation.offer_id == AffiliateOffer.id)
-            .where(
-                UserRecommendation.user_id == current_user.id,
-                UserRecommendation.placement == req.placement,
-                UserRecommendation.expires_at > datetime.utcnow()
-            )
-            .order_by(desc(UserRecommendation.score))
-            .limit(req.max_items)
-        )
-        
-        results = db.execute(stmt).all()
-        
-        items = []
-        for rec, offer in results:
-            # Re-generate a fresh token if needed? 
-            # The spec says token is generated at persistence time. We use that one.
-            # We assume token_hash is in DB, but we need the RAW token to send to client.
-            # WAIT: We stored `token_hash` in DB. We CANNOT recover raw token.
-            # ISSUE: If we pre-calculate in worker, how do we send the raw token to client later?
-            # 
-            # FIX from Spec step 3: "Invia raw_token al client nel payload JSON" -> implies immediate return or storage.
-            # If we store only HASH, we can't show it later.
-            # 
-            # ARCHITECTURE FIX:
-            # Option A: Store raw_token encrypted (User-retrievable).
-            # Option B: Generate new ephemeral token on READ (API).
-            # 
-            # Let's go with B (Secure & Fresh).
-            # The Worker found the Match. The API generates the specific Click Token for this session.
-            
-            redirect_service = AffiliateRedirectService(db)
-            raw_token, public_id = redirect_service.generate_token(
-                user_id=current_user.id,
-                offer_id=offer.id,
-                placement=req.placement,
-                score=rec.score,
-                reason_code=rec.reason_code
-            )
-            
-            items.append(RecommendationItem(
-                public_id=public_id,
-                title=offer.title,
-                body=offer.copy_text,
-                action_token=raw_token,
-                score=rec.score,
-                image_url=offer.image_url,
-                badge="Partner" # or logic based on priority
-            ))
-            
-        return RecommendationResponse(
-            placement=req.placement,
-            ab_variant="CONTROL", # Placeholder for A/B logic
-            items=items
-        )
+    # 1. Analyze User Context (Mock)
+    # Ideally we check: current_user.analysis_result or DB transactions
+    # MVP: Assume everyone needs Energy options :)
+    
+    context = AffiliateContext(
+        user_id=str(current_user.id),
+        locale="it_IT", # Default
+        keywords=["energia", "bolletta"]
+    )
+    
+    offers = await aggregator.search_offers(
+        vertical=AffiliateVertical.UTILITIES,
+        query="migliore offerta luce gas",
+        context=context,
+        limit=3
+    )
+    
+    return SearchResponse(results=offers)
 
-    except Exception as e:
-        logger.error("affiliate_recommendations_failed", error=str(e))
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-
-
-@router.post("/interactions", status_code=202)
-async def track_interaction(
-    req: InteractionRequest,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Log interactions (Impression, Dismiss).
-    """
-    try:
-        # Idempotency Check (if key provided)
-        if req.idempotency_key:
-            exists = db.query(AffiliateInteraction).filter_by(
-                user_id=current_user.id,
-                idempotency_key=req.idempotency_key
-            ).first()
-            if exists:
-                return {"status": "ignored_idempotent"}
-
-        # Log
-        interaction = AffiliateInteraction(
-            user_id=current_user.id,
-            event_type=req.event, # ENUM mapping might be needed if strictly typed in Schema
-            placement=req.placement,
-            idempotency_key=req.idempotency_key,
-            offer_id=0, # Need to lookup from public_id...
-            recommendation_id=0
-        )
-        
-        # We need to link public_id back to recommendation/offer
-        # If rec is ephemeral, we might rely on the token/public_id being in `user_recommendations`
-        # But `generate_token` creates a NEW `user_recommendation` entry.
-        # So `req.public_id` SHOULD exist in `user_recommendations`.
-        
-        rec = db.query(UserRecommendation).filter_by(public_id=req.public_id).first()
-        if rec:
-            interaction.recommendation_id = rec.id
-            interaction.offer_id = rec.offer_id
-            
-            # Update Denormalized State if DISMISS
-            if req.event == "DISMISS":
-               from models.affiliate import UserOfferState
-               state = db.get(UserOfferState, (current_user.id, rec.offer_id))
-               if not state:
-                   state = UserOfferState(user_id=current_user.id, offer_id=rec.offer_id)
-                   db.add(state)
-               
-               state.is_dismissed = True
-               state.dismissed_until = datetime.utcnow() + getattr(datetime, 'timedelta')(days=90) # Hard dismiss default
-               
-            db.add(interaction)
-            db.commit()
-        else:
-            logger.warning("interaction_rec_not_found", public_id=req.public_id)
-
-        return {"status": "accepted"}
-
-    except Exception as e:
-        logger.error("affiliate_interaction_failed", error=str(e))
-        # Don't block client
-        return {"status": "error", "detail": str(e)}
-
-
-@router.get("/redirect/{token}")
+@router.get("/r/{token}")
 async def redirect_offer(
     token: str,
     request: Request,
     db: Session = Depends(get_db)
 ):
     """
-    Secure Redirect Endpoint.
+    Secure Redirect Endpoint: /affiliate/r/{token}
     """
-    service = AffiliateRedirectService(db)
-    target_url = service.resolve_token(
-        raw_token=token,
-        user_agent=request.headers.get("user-agent"),
-        ip_address=request.client.host
-    )
+    # 1. Lookup Token
+    db_token = db.query(AffiliateClickToken).filter(
+        AffiliateClickToken.token == token
+    ).first()
     
-    if not target_url:
-        # 410 or custom error page
-        raise HTTPException(status_code=410, detail="Offerta non più disponibile o scaduta.")
+    if not db_token:
+        logger.warning("affiliate_token_not_found", token=token[:8])
+        raise HTTPException(status_code=404, detail="Offerta non valida")
         
+    if db_token.expires_at < datetime.utcnow():
+        logger.info("affiliate_token_expired", token=token[:8])
+        raise HTTPException(status_code=410, detail="Offerta scaduta")
+
+    # 2. Log Click Event
+    try:
+        click_event = AffiliateClickEvent(
+            token=token,
+            user_id_hash=db_token.user_id_hash,
+            vertical=db_token.vertical,
+            provider=db_token.provider,
+            metadata_min={
+                "ip": request.client.host,
+                "ua": request.headers.get("user-agent"),
+                "referer": request.headers.get("referer")
+            }
+        )
+        db.add(click_event)
+        db.commit()
+    except Exception as e:
+        logger.error("affiliate_click_log_failed", error=str(e))
+        # Proceed anyway, don't block user
+    
+    # 3. Construct Final URL (Provider specific logic if needed)
+    # For MVP, we assume payload_min['landing_url'] is what we want,
+    # OR we use the provider logic to rebuild it if dynamic parameters needed?
+    # Our Aggregator already stored the final 'destination' URL in payload_min.
+    # BUT wait: Interfaces said `build_tracking_link` adds the SUB_ID.
+    # We should probably do that step here to ensure SUB_ID matches THIS click.
+    
+    final_url = db_token.payload_min.get("landing_url")
+    if not final_url:
+        raise HTTPException(status_code=500, detail="Configuration Error")
+        
+    # Inject SubID dynamically?
+    # For MVP, Aggregator stored `final_url` (destination). 
+    # We can append `?ref=savy_{token}` as a naive implementation for ALL providers
+    # if we don't load the specific Provider class here.
+    # IF we want provider-specific tracking logic (e.g. `tag=` vs `subId=`), we need to load the Provider.
+    
+    # RE-LOAD PROVIDER to build correct link?
+    # aggregator = get_aggregator(db)
+    # provider = aggregator.providers.get(db_token.provider)
+    # if provider:
+    #     final_url = provider.build_tracking_link(...)
+    
+    # Implementation Simplification:
+    # Let's assume `payload_min` contains the raw destination.
+    # We append a generic `subId` param or trust the mocked provider logic if accessible.
+    
+    # For Phase 1 Mocking:
+    if "amazon" in final_url:
+         final_url = f"{final_url}&ascsubtag={token}"
+    elif "?" in final_url:
+         final_url = f"{final_url}&savy_click={token}"
+    else:
+         final_url = f"{final_url}?savy_click={token}"
+
     from fastapi.responses import RedirectResponse
-    return RedirectResponse(url=target_url, status_code=302)
+    return RedirectResponse(url=final_url, status_code=302)
+
+
+@router.post("/postback/{network}")
+async def postback_webhook(
+    network: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    S2S Conversion Postback
+    """
+    try:
+        payload = await request.json()
+    except:
+        payload = await request.form() # Fallback
+        
+    logger.info("affiliate_postback_received", network=network, payload=payload)
+    
+    # Parse generic fields (MVP)
+    # Usually network sends `sub_id`, `amount`, `status`
+    sub_id = payload.get("sub_id") or payload.get("custom_id")
+    amount = payload.get("amount") or payload.get("commission")
+    
+    if sub_id:
+        conv = AffiliateConversion(
+            sub_id=sub_id,
+            network=network,
+            amount=float(amount) if amount else 0.0,
+            status=payload.get("status", "pending"),
+            raw_payload=dict(payload)
+        )
+        db.add(conv)
+        db.commit()
+        return {"status": "recorded"}
+    
+    return {"status": "ignored_no_id"}
+

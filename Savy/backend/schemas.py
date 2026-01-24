@@ -186,6 +186,7 @@ class ChatResponse(BaseModel):
     reasoning: str
     suggestion: Optional[str] = None
     optimization_leads: List[OptimizationLeadResponse] = []
+    affiliate_offers: Optional[List[Dict[str, Any]]] = None
     metadata: Optional[Dict[str, Any]] = None
 
 

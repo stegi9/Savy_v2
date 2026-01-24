@@ -23,7 +23,8 @@ google-genai>=1.56.0
 
 # Auth & Security
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+passlib[bcrypt,argon2]==1.7.4
+argon2-cffi==23.1.0
 pyjwt==2.8.0
 python-dotenv==1.0.1
 

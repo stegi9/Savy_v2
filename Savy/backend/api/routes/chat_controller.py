@@ -39,7 +39,8 @@ async def chat_endpoint(
         
         return ChatResponse(
             decision=result["decision"],
-            reasoning=result["reasoning"]
+            reasoning=result["reasoning"],
+            affiliate_offers=result.get("affiliate_offers", [])
         )
         
     except Exception as e:

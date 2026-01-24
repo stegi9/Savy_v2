@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/services/api_client.dart';
 import '../../../../core/l10n/app_strings.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // Provider for ApiClient
 final apiClientProvider = Provider<ApiClient>((ref) {
@@ -19,11 +20,13 @@ class ChatMessage {
   final bool isUser;
   final String? decision; // affordable, caution, not_affordable
   final DateTime timestamp;
+  final List<dynamic>? affiliateOffers; // List of affiliate cards
 
   ChatMessage({
     required this.content,
     required this.isUser,
     this.decision,
+    this.affiliateOffers,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 }
@@ -85,6 +88,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               content: response['reasoning'] ?? 'Nessuna risposta disponibile',
               isUser: false,
               decision: response['decision'],
+              affiliateOffers: response['affiliate_offers'],
             ),
           ]);
 
@@ -413,6 +417,13 @@ class _MessageBubble extends StatelessWidget {
                     color: theme.colorScheme.onSurface.withOpacity(0.6),
                   ),
                 ),
+
+                if (!message.isUser &&
+                    message.affiliateOffers != null &&
+                    message.affiliateOffers!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _AffiliateOffersCarousel(offers: message.affiliateOffers!),
+                ],
               ],
             ),
           ),
@@ -439,6 +450,195 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
+class _AffiliateOffersCarousel extends StatelessWidget {
+  final List<dynamic> offers;
+
+  const _AffiliateOffersCarousel({required this.offers});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 220, // Height for the cards
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: offers.length,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        separatorBuilder: (context, index) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          final offer = offers[index];
+          return _AffiliateCard(offer: offer);
+        },
+      ),
+    );
+  }
+}
+
+class _AffiliateCard extends StatelessWidget {
+  final Map<String, dynamic> offer;
+
+  const _AffiliateCard({required this.offer});
+
+  Future<void> _launchURL(BuildContext context, String? urlString) async {
+    if (urlString == null) return;
+    
+    // HARDCODED HOST FOR MVP (10.0.2.2 for Android Emulator)
+    // In production this should come from ApiClient config
+    const baseUrl = "http://10.0.2.2:8000/api/v1"; 
+    
+    String fullUrl = urlString;
+    if (urlString.startsWith("/")) {
+       // Append API base if relative path
+       fullUrl = "$baseUrl$urlString"; 
+    }
+
+    try {
+      final Uri url = Uri.parse(fullUrl);
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+         ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossibile aprire l\'offerta')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error launching url: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final title = offer['title'] ?? 'Offerta';
+    final price = offer['price'];
+    final badge = offer['badge'];
+    final imageUrl = offer['image_url'];
+    final redirectUrl = offer['redirect_url'];
+    final ctaLabel = offer['cta_label'] ?? 'Vedi';
+
+    return Container(
+      width: 220,
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _launchURL(context, redirectUrl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Image Area
+              Expanded(
+                flex: 3,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (imageUrl != null)
+                      Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                         color: theme.colorScheme.surfaceVariant,
+                         child: Icon(Icons.shopping_bag_outlined, color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                      )
+                    else
+                      Container(
+                        color: theme.colorScheme.primary.withOpacity(0.1),
+                        child: Icon(Icons.local_offer, color: theme.colorScheme.primary, size: 32),
+                      ),
+                    
+                    if (badge != null)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            badge,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              
+              // Info Area
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          if (price != null)
+                            Text(
+                              price,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              ctaLabel,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 class _DecisionBadge extends StatelessWidget {
   final String decision;
 

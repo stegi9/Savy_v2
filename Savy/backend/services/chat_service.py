@@ -49,7 +49,8 @@ class ChatService:
                 "decision": result.get("decision", "unknown"),
                 "reasoning": reasoning_text,
                 "balance": result.get("balance", 0.0),
-                "upcoming_bills": result.get("upcoming_bills", [])
+                "upcoming_bills": result.get("upcoming_bills", []),
+                "affiliate_offers": result.get("affiliate_offers", [])
             }
             
         except Exception as e:
