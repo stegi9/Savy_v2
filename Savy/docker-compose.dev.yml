@@ -1,0 +1,46 @@
+# Savy - Local Development Docker Compose
+# Lightweight setup for local development
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # MYSQL DATABASE
+  # =============================================================================
+  db:
+    image: mysql:8.0
+    container_name: savy-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=dev_root_password
+      - MYSQL_DATABASE=savy_db
+      - MYSQL_USER=savy_user
+      - MYSQL_PASSWORD=dev_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # REDIS (Optional - for caching)
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: savy-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mysql_dev_data:
+  redis_dev_data:

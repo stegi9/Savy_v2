@@ -34,6 +34,18 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     
+    # Affiliate APIs (Optional - falls back to mock if not set)
+    amazon_access_key: str = ""
+    amazon_secret_key: str = ""
+    amazon_partner_tag: str = "savy-21"
+    amazon_country: str = "IT"
+    
+    awin_api_token: str = ""
+    awin_publisher_id: str = ""
+    
+    booking_affiliate_id: str = ""
+    booking_api_key: str = ""
+    
     # API
     api_v1_prefix: str = "/api/v1"
     cors_origins: str = "http://localhost:3000,http://localhost:8080,http://10.0.2.2:8000"

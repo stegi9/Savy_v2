@@ -1,0 +1,81 @@
+# Savy Backend - Production Dockerfile with Gunicorn
+# Optimized for multi-user scalability and zero latency
+
+FROM python:3.11-slim AS builder
+
+# Build stage - install dependencies
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install requirements
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt && \
+    pip wheel --no-cache-dir --wheel-dir /wheels gunicorn uvloop httptools
+
+# =============================================================================
+# Production Stage
+# =============================================================================
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    # Gunicorn settings
+    WEB_CONCURRENCY=4 \
+    GUNICORN_WORKERS=4 \
+    GUNICORN_THREADS=2 \
+    GUNICORN_TIMEOUT=120 \
+    # App settings
+    ENVIRONMENT=production
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy wheels from builder
+COPY --from=builder /wheels /wheels
+RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash appuser
+
+# Copy application code
+COPY --chown=appuser:appuser . .
+
+# Switch to non-root user
+USER appuser
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run with Gunicorn + Uvicorn workers for production
+# - 4 workers (adjust based on CPU cores)
+# - 2 threads per worker
+# - Uvicorn worker class for async support
+CMD ["gunicorn", "main:app", \
+     "--bind", "0.0.0.0:8000", \
+     "--workers", "4", \
+     "--threads", "2", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--timeout", "120", \
+     "--keep-alive", "5", \
+     "--max-requests", "1000", \
+     "--max-requests-jitter", "50", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--capture-output"]

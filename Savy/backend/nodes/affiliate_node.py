@@ -2,8 +2,8 @@ import structlog
 from typing import Dict, Any, List
 from services.affiliate.aggregator import AffiliateAggregatorService
 from services.affiliate.interfaces import AffiliateVertical, AffiliateContext, ScoredOffer
-from services.affiliate.providers.amazon_provider import AmazonProvider
-from services.affiliate.providers.travel_provider import TravelProvider
+from services.affiliate.providers.real_amazon_provider import RealAmazonProvider
+from services.affiliate.providers.booking_provider import BookingProvider
 from services.intent_detector import detect_intent_and_entities, map_vertical_to_enum
 from db.database import SessionLocal
 from config import settings
@@ -52,12 +52,12 @@ class AffiliateNode:
                     search_query=search_query,
                     entities=intent.get("entities", []))
 
-        # 3. Run Aggregator with extracted search query
+        # 3. Run Aggregator with REAL providers
         offers = []
         with SessionLocal() as db:
             aggr = AffiliateAggregatorService(db)
-            aggr.register_provider(AmazonProvider())
-            aggr.register_provider(TravelProvider())
+            aggr.register_provider(RealAmazonProvider())
+            aggr.register_provider(BookingProvider())
 
             context = AffiliateContext(
                 user_id=str(user_id),
