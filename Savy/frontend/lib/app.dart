@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/screens/login_screen.dart';
+import 'features/auth/presentation/screens/password_reset_screen.dart';
+import 'features/auth/presentation/screens/email_verification_screen.dart';
 import 'features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'features/transactions/presentation/screens/transactions_screen.dart';
 import 'features/categories/presentation/screens/categories_screen.dart';
@@ -13,8 +15,11 @@ import 'features/chat/presentation/screens/chat_screen.dart';
 import 'features/optimization/presentation/screens/optimization_screen.dart';
 import 'features/analytics/presentation/screens/deep_dive_screen.dart';
 import 'features/bank_integration/presentation/bank_connect_screen.dart';
+import 'features/onboarding/presentation/screens/onboarding_screen.dart';
 
 import 'core/providers/preferences_provider.dart';
+import 'core/providers/auth_provider.dart';
+import 'core/services/storage_helper.dart';
 
 class SavyApp extends ConsumerWidget {
   const SavyApp({super.key});
@@ -37,12 +42,70 @@ class SavyApp extends ConsumerWidget {
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
+  final authState = ref.watch(authStateProvider);
+
   return GoRouter(
-    initialLocation: '/login',
+    initialLocation: '/onboarding',  // Start with onboarding check
+    redirect: (context, state) async {
+      final isAuthenticated = ref.read(authStateProvider).isAuthenticated;
+      final isLoading = ref.read(authStateProvider).isLoading;
+      final currentPath = state.matchedLocation;
+      
+      // Public routes that don't need auth check
+      final publicRoutes = ['/onboarding', '/login', '/reset-password', '/verify-email'];
+      final isPublicRoute = publicRoutes.any((route) => currentPath.startsWith(route));
+
+      // Check if onboarding is completed
+      final storage = StorageHelper.instance;
+      final onboardingCompleted = await storage.read(key: 'onboarding_completed');
+
+      // Show onboarding if not completed
+      if (onboardingCompleted == null && currentPath != '/onboarding') {
+        return '/onboarding';
+      }
+
+      // Still checking auth status - stay on current route
+      if (isLoading) {
+        return null;
+      }
+
+      // After onboarding is done, check auth
+      if (onboardingCompleted != null) {
+        // Not authenticated and trying to access protected route
+        if (!isAuthenticated && !isPublicRoute) {
+          return '/login';
+        }
+
+        // Authenticated and on login/onboarding page - go to dashboard
+        if (isAuthenticated && (currentPath == '/login' || currentPath == '/onboarding')) {
+          return '/dashboard';
+        }
+      }
+
+      return null;
+    },
     routes: [
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => const OnboardingScreen(),
+      ),
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        builder: (context, state) {
+          final token = state.uri.queryParameters['token'];
+          return PasswordResetScreen(token: token);
+        },
+      ),
+      GoRoute(
+        path: '/verify-email',
+        builder: (context, state) {
+          final token = state.uri.queryParameters['token'];
+          return EmailVerificationScreen(token: token);
+        },
       ),
       GoRoute(
         path: '/',
@@ -96,7 +159,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         redirect: (context, state) => '/bank-connect?success=true',
       ),
     ],
+    refreshListenable: GoRouterRefreshStream(authState),
   );
 });
 
+/// Helper to make GoRouter reactive to auth changes
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(AuthState authState) {
+    _authState = authState;
+  }
+
+  late AuthState _authState;
+
+  void update(AuthState authState) {
+    if (_authState.isAuthenticated != authState.isAuthenticated) {
+      _authState = authState;
+      notifyListeners();
+    }
+  }
+}
 

@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/app_providers.dart';
 import '../../../../core/providers/preferences_provider.dart';
 import '../../../../core/l10n/app_strings.dart';
+import '../../../../core/services/biometric_auth_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -28,6 +29,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _balanceController.dispose();
     _budgetController.dispose();
     super.dispose();
+  }
+
+  Future<bool> _checkBiometricAvailability() async {
+    try {
+      final bioAuth = BiometricAuthService();
+      return await bioAuth.isAvailable();
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _enableBiometric() async {
+    final bioAuth = BiometricAuthService();
+    final authenticated = await bioAuth.authenticate(
+      reason: 'Abilita autenticazione biometrica per Savy',
+    );
+    
+    if (authenticated) {
+      // TODO: Save preference
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Autenticazione biometrica abilitata'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _disableBiometric() async {
+    // TODO: Remove preference
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Autenticazione biometrica disabilitata'),
+        ),
+      );
+    }
   }
 
   @override
@@ -172,6 +212,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                         ],
                       ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                _SettingsSection(
+                  title: 'Sicurezza',
+                  icon: Icons.security_outlined,
+                  children: [
+                    FutureBuilder<bool>(
+                      future: _checkBiometricAvailability(),
+                      builder: (context, snapshot) {
+                        final isAvailable = snapshot.data ?? false;
+                        return _SettingsSwitch(
+                          title: 'Autenticazione Biometrica',
+                          subtitle: isAvailable 
+                              ? 'Usa Face ID / Fingerprint per accedere'
+                              : 'Non disponibile su questo dispositivo',
+                          value: false, // TODO: Load from preferences
+                          onChanged: (value) {
+                            if (!isAvailable) return; // Early return if not available
+                            if (value) {
+                              _enableBiometric();
+                            } else {
+                              _disableBiometric();
+                            }
+                          },
+                        );
+                      },
                     ),
                   ],
                 ),

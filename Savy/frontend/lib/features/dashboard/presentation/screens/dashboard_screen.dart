@@ -1,51 +1,111 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/app_providers.dart';
-import 'package:savy_frontend/features/affiliate/presentation/widgets/smart_suggestion_card.dart';
-import 'package:savy_frontend/features/affiliate/presentation/providers/affiliate_provider.dart';
+import '../../../../core/widgets/modern_widgets.dart';
+import '../../../affiliate/presentation/widgets/smart_suggestion_card.dart';
+import '../../../affiliate/presentation/providers/affiliate_provider.dart';
+import '../../../../core/l10n/app_strings.dart';
 
-import 'package:savy_frontend/core/l10n/app_strings.dart';
-
+/// SAVY Dashboard - Ultra-Modern Design
+/// iOS/Revolut inspired with glassmorphism and fluid animations
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dashboardData = ref.watch(dashboardDataProvider);
-    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: dashboardData.when(
-        data: (data) => _buildDashboard(context, ref, data),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
-              const SizedBox(height: 16),
-              Text('Errore: ${error.toString()}', style: TextStyle(color: theme.colorScheme.onSurface)),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => ref.invalidate(dashboardDataProvider),
-                child: const Text('Riprova'),
-              ),
-            ],
-          ),
+      extendBodyBehindAppBar: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(dashboardDataProvider);
+          await Future.delayed(const Duration(milliseconds: 500));
+        },
+        color: AppColors.primary,
+        child: dashboardData.when(
+          data: (data) => _buildDashboard(context, ref, data),
+          loading: () => _buildLoadingState(context),
+          error: (error, stack) => _buildErrorState(context, ref, error),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await context.push('/chat');
-          ref.invalidate(dashboardDataProvider);
-        },
-        backgroundColor: theme.colorScheme.primary,
-        icon: Icon(Icons.psychology_rounded, color: theme.colorScheme.onPrimary),
-        label: Text('Coach AI', style: TextStyle(color: theme.colorScheme.onPrimary)),
+      floatingActionButton: _buildAICoachButton(context, ref),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
+  }
+
+  Widget _buildLoadingState(BuildContext context) {
+    return CustomScrollView(
+      slivers: [
+        _buildModernAppBar(context, 'Ciao 👋'),
+        SliverPadding(
+          padding: const EdgeInsets.all(20),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              ShimmerLoading(
+                child: Container(
+                  height: 220,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              ShimmerLoading(
+                child: Container(
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorState(BuildContext context, WidgetRef ref, Object error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconContainer(
+              icon: Icons.error_outline_rounded,
+              color: AppColors.error,
+              size: 80,
+              iconSize: 48,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Ops! Qualcosa è andato storto',
+              style: Theme.of(context).textTheme.headlineSmall,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              error.toString(),
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            FilledButton.icon(
+              onPressed: () => ref.invalidate(dashboardDataProvider),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Riprova'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -59,7 +119,6 @@ class DashboardScreen extends ConsumerWidget {
     final currentBalance = _parseDouble(profile['current_balance']);
     final monthlyBudget = _parseDouble(settings['monthly_budget']);
     final fullName = profile['full_name'] as String;
-    final theme = Theme.of(context);
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -67,104 +126,185 @@ class DashboardScreen extends ConsumerWidget {
         ref.invalidate(dashboardRecommendationProvider);
       },
       child: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
         slivers: [
-          // App Bar with Gradient
-          SliverAppBar(
-            expandedHeight: 180,
-            floating: false,
-            pinned: true,
-            backgroundColor: theme.colorScheme.primary,
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-              title: const Text(
-                'Dashboard',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      theme.colorScheme.primary,
-                      AppColors.primaryDark,
-                    ],
-                  ),
-                ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 60),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Ciao, $fullName 👋',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Nessuna notifica')),
-                  );
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.settings_outlined, color: Colors.white),
-                onPressed: () async {
-                  await context.push('/settings');
-                  ref.invalidate(dashboardDataProvider);
-                },
-              ),
-            ],
-          ),
+          // Modern App Bar with blur effect
+          _buildModernAppBar(context, 'Ciao, $fullName 👋'),
 
           SliverPadding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                // Balance Card
-                _BalanceCard(
+                const SizedBox(height: 20),
+                
+                // Premium Balance Card
+                _ModernBalanceCard(
                   balance: currentBalance,
                   budget: monthlyBudget,
                   reportData: reportData,
                 ),
-                const SizedBox(height: 16),
-
-                // Affiliate Suggestion
+                
+                const SizedBox(height: 24),
+                
+                // Stats Row
+                _StatsRow(reportData: reportData),
+                
+                const SizedBox(height: 24),
+                
+                // Smart Suggestion
                 const SmartSuggestionCard(),
-                const SizedBox(height: 16),
-
-                // Quick Actions
-                _QuickActions(onRefresh: () => ref.invalidate(dashboardDataProvider)),
+                
                 const SizedBox(height: 24),
-
+                
+                // Quick Actions Grid
+                _ModernQuickActions(
+                  onRefresh: () => ref.invalidate(dashboardDataProvider),
+                ),
+                
+                const SizedBox(height: 32),
+                
                 // Spending Chart
-                _SpendingChart(reportData: reportData),
-                const SizedBox(height: 24),
-
+                _ModernSpendingChart(reportData: reportData),
+                
+                const SizedBox(height: 32),
+                
                 // Bills Section
-                _BillsList(bills: bills, onRefresh: () => ref.invalidate(dashboardDataProvider)),
+                if (bills.isNotEmpty)
+                  _ModernBillsList(
+                    bills: bills,
+                    onRefresh: () => ref.invalidate(dashboardDataProvider),
+                  ),
               ]),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildModernAppBar(BuildContext context, String greeting) {
+    return SliverAppBar(
+      expandedHeight: 120,
+      floating: false,
+      pinned: true,
+      stretch: true,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      flexibleSpace: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primary.withOpacity(0.95),
+                  AppColors.primaryAccent.withOpacity(0.95),
+                ],
+              ),
+            ),
+            child: FlexibleSpaceBar(
+              titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
+              title: Text(
+                greeting,
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              stretchModes: const [
+                StretchMode.zoomBackground,
+                StretchMode.fadeTitle,
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        IconButton(
+          icon: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 22),
+          ),
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Nessuna notifica'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
+        ),
+        IconButton(
+          icon: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
+          ),
+          onPressed: () async {
+            await context.push('/settings');
+          },
+        ),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  Widget _buildAICoachButton(BuildContext context, WidgetRef ref) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.gradientBlueStart, AppColors.gradientBlueEnd],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () async {
+            await context.push('/chat');
+            ref.invalidate(dashboardDataProvider);
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.psychology_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'AI Coach',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -176,13 +316,15 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-// Balance Card Widget
-class _BalanceCard extends StatelessWidget {
+// ============================================================================
+// Modern Balance Card with Glassmorphism
+// ============================================================================
+class _ModernBalanceCard extends StatelessWidget {
   final double balance;
   final double budget;
   final Map<String, dynamic> reportData;
 
-  const _BalanceCard({
+  const _ModernBalanceCard({
     required this.balance,
     required this.budget,
     required this.reportData,
@@ -192,25 +334,378 @@ class _BalanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final report = reportData['data'] ?? {};
     final totalSpent = (report['total_spent'] as num?)?.toDouble() ?? 0.0;
-    final remaining = balance;
     final percentUsed = budget > 0 ? (totalSpent / budget * 100).clamp(0, 100) : 0.0;
-    final theme = Theme.of(context);
+
+    return GradientCard(
+      colors: const [
+        AppColors.gradientBlueStart,
+        AppColors.gradientBlueEnd,
+      ],
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      AppStrings.get('availableBalance'),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    AnimatedCounter(
+                      value: balance,
+                      prefix: '€',
+                      style: const TextStyle(
+                        fontSize: 42,
+                        fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: -1.5,
+                      height: 1,
+                    ),
+                  ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_rounded,
+                  color: Colors.white,
+                  size: 32,
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 24),
+          
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _BalanceInfo(
+                        label: AppStrings.get('spent'),
+                        value: '€${totalSpent.toStringAsFixed(2)}',
+                        icon: Icons.arrow_upward_rounded,
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 40,
+                      color: Colors.white.withOpacity(0.3),
+                    ),
+                    Expanded(
+                      child: _BalanceInfo(
+                        label: AppStrings.get('budget'),
+                        value: '€${budget.toStringAsFixed(2)}',
+                        icon: Icons.flag_rounded,
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 20),
+                
+                Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Budget utilizzato',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.white70,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          '${percentUsed.toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: percentUsed > 90 ? AppColors.accentOrange : Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: LinearProgressIndicator(
+                        value: percentUsed / 100,
+                        minHeight: 10,
+                        backgroundColor: Colors.white.withOpacity(0.2),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          percentUsed > 90 
+                              ? AppColors.accentOrange 
+                              : AppColors.gradientGreenStart,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BalanceInfo extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  const _BalanceInfo({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white70, size: 20),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            color: Colors.white60,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            letterSpacing: -0.3,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// Stats Row
+// ============================================================================
+class _StatsRow extends StatelessWidget {
+  final Map<String, dynamic> reportData;
+
+  const _StatsRow({required this.reportData});
+
+  @override
+  Widget build(BuildContext context) {
+    final report = reportData['data'] ?? {};
+    final totalSpent = (report['total_spent'] as num?)?.toDouble() ?? 0.0;
+    final categories = (report['categories'] as List?)?.length ?? 0;
+
+    return Row(
+      children: [
+        Expanded(
+          child: StatCard(
+            title: 'Spese totali',
+            value: '€${totalSpent.toStringAsFixed(0)}',
+            icon: Icons.trending_down_rounded,
+            color: AppColors.error,
+            subtitle: 'Questo mese',
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: StatCard(
+            title: 'Categorie',
+            value: categories.toString(),
+            icon: Icons.category_rounded,
+            color: AppColors.accentPurple,
+            subtitle: 'Attive',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// Modern Quick Actions
+// ============================================================================
+class _ModernQuickActions extends StatelessWidget {
+  final VoidCallback onRefresh;
+
+  const _ModernQuickActions({required this.onRefresh});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Azioni Rapide',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _ActionCard(
+                icon: Icons.add_circle_outline_rounded,
+                label: 'Nuova\nTransazione',
+                gradient: const [AppColors.gradientBlueStart, AppColors.gradientBlueEnd],
+                onTap: () async {
+                  await context.push('/transactions');
+                  onRefresh();
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ActionCard(
+                icon: Icons.category_rounded,
+                label: 'Gestisci\nCategorie',
+                gradient: const [AppColors.accentPurple, AppColors.primaryAccent],
+                onTap: () => context.push('/categories'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ActionCard(
+                icon: Icons.receipt_long_rounded,
+                label: 'Bollette\nScadenza',
+                gradient: const [AppColors.accentOrange, AppColors.warning],
+                onTap: () async {
+                  await context.push('/bills');
+                  onRefresh();
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ActionCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final List<Color> gradient;
+  final VoidCallback onTap;
+
+  const _ActionCard({
+    required this.icon,
+    required this.label,
+    required this.gradient,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: gradient.map((c) => c.withOpacity(0.1)).toList(),
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: gradient.first.withOpacity(0.3),
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: gradient),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: Colors.white, size: 24),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+                height: 1.3,
+                letterSpacing: -0.1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// Modern Spending Chart
+// ============================================================================
+class _ModernSpendingChart extends StatelessWidget {
+  final Map<String, dynamic> reportData;
+
+  const _ModernSpendingChart({required this.reportData});
+
+  @override
+  Widget build(BuildContext context) {
+    final report = reportData['data'] ?? {};
+    final categories = (report['categories'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+    if (categories.isEmpty) {
+      return _EmptyChartCard();
+    }
 
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            theme.colorScheme.primary,
-            theme.colorScheme.primary.withOpacity(0.8),
-          ],
-        ),
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.primary.withOpacity(0.3),
+            color: AppColors.shadowLight,
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -219,231 +714,23 @@ class _BalanceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            AppStrings.get('availableBalance'),
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.white70,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '€${remaining.toStringAsFixed(2)}',
-            style: const TextStyle(
-              fontSize: 40,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      AppStrings.get('spent'),
-                      style: const TextStyle(fontSize: 12, color: Colors.white60),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '€${totalSpent.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      AppStrings.get('budget'),
-                      style: const TextStyle(fontSize: 12, color: Colors.white60),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '€${budget.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: percentUsed / 100,
-              minHeight: 8,
-              backgroundColor: Colors.white24,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                percentUsed > 90 ? theme.colorScheme.error : AppColors.accent,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${percentUsed.toStringAsFixed(1)}${AppStrings.get('budgetUsed')}',
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.white70,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// Quick Actions
-class _QuickActions extends StatelessWidget {
-  final VoidCallback onRefresh;
-
-  const _QuickActions({required this.onRefresh});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
-    return Row(
-      children: [
-        Expanded(
-          child: _ActionButton(
-            icon: Icons.add,
-            label: AppStrings.get('actionTransaction'),
-            color: theme.colorScheme.primary,
-            onTap: () async {
-              await context.push('/transactions');
-              onRefresh();
-            },
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _ActionButton(
-            icon: Icons.category,
-            label: AppStrings.get('actionCategories'),
-            color: AppColors.secondary,
-            onTap: () => context.push('/categories'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _ActionButton(
-            icon: Icons.receipt_long,
-            label: AppStrings.get('actionBills'),
-            color: AppColors.accent,
-            onTap: () async {
-              await context.push('/bills');
-              onRefresh();
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.2)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// Spending Chart
-class _SpendingChart extends StatelessWidget {
-  final Map<String, dynamic> reportData;
-
-  const _SpendingChart({required this.reportData});
-
-  @override
-  Widget build(BuildContext context) {
-    final report = reportData['data'] ?? {};
-    final categories = (report['categories'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final theme = Theme.of(context);
-
-    if (categories.isEmpty) {
-      return _EmptyChartCard();
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                AppStrings.get('expensesByCategory'),
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface,
+              Flexible(
+                child: Text(
+                  AppStrings.get('expensesByCategory'),
+                  style: Theme.of(context).textTheme.titleLarge,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               TextButton(
                 onPressed: () => context.push('/analytics/deep-dive'),
-                child: Text(AppStrings.get('advancedAnalytics')),
+                child: const Text('Dettagli'),
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           SizedBox(
             height: 200,
             child: PieChart(
@@ -451,50 +738,56 @@ class _SpendingChart extends StatelessWidget {
                 sections: categories.map((cat) {
                   final total = (cat['total_spent'] as num?)?.toDouble() ?? 0.0;
                   final percentage = (cat['percentage_of_total'] as num?)?.toDouble() ?? 0.0;
-                  final colorHex = cat['color'] as String? ?? '#3B82F6';
+                  final colorHex = cat['color'] as String? ?? '#0A84FF';
                   final color = _hexToColor(colorHex);
 
                   return PieChartSectionData(
                     value: total,
                     title: '${percentage.toStringAsFixed(0)}%',
                     color: color,
-                    radius: 60,
+                    radius: 70,
                     titleStyle: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
                       color: Colors.white,
+                      letterSpacing: -0.3,
                     ),
                   );
                 }).toList(),
-                sectionsSpace: 2,
-                centerSpaceRadius: 40,
+                sectionsSpace: 3,
+                centerSpaceRadius: 50,
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          ...categories.map((cat) {
+          const SizedBox(height: 24),
+          ...categories.take(5).map((cat) {
             final name = cat['category_name'] as String;
             final total = (cat['total_spent'] as num?)?.toDouble() ?? 0.0;
-            final colorHex = cat['color'] as String? ?? '#3B82F6';
+            final colorHex = cat['color'] as String? ?? '#0A84FF';
             final color = _hexToColor(colorHex);
 
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 children: [
                   Container(
-                    width: 16,
-                    height: 16,
+                    width: 12,
+                    height: 12,
                     decoration: BoxDecoration(
                       color: color,
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(3),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(child: Text(name, style: TextStyle(color: theme.colorScheme.onSurface))),
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  ),
                   Text(
                     '€${total.toStringAsFixed(2)}',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
                 ],
               ),
@@ -514,149 +807,124 @@ class _SpendingChart extends StatelessWidget {
 class _EmptyChartCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
     return Container(
-      padding: const EdgeInsets.all(40),
+      padding: const EdgeInsets.all(48),
       decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(24),
       ),
-      child: Center(
-        child: Column(
-          children: [
-            const Icon(Icons.pie_chart_outline, size: 64, color: AppColors.textSecondary),
-            const SizedBox(height: 16),
-            Text(
-              'Nessuna spesa registrata',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Inizia ad aggiungere transazioni',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
+      child: Column(
+        children: [
+          IconContainer(
+            icon: Icons.pie_chart_outline_rounded,
+            color: AppColors.textTertiary,
+            size: 80,
+            iconSize: 48,
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Nessuna spesa registrata',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Inizia ad aggiungere transazioni',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
       ),
     );
   }
 }
 
-// Bills List
-class _BillsList extends StatelessWidget {
+// ============================================================================
+// Modern Bills List
+// ============================================================================
+class _ModernBillsList extends StatelessWidget {
   final List bills;
   final VoidCallback onRefresh;
 
-  const _BillsList({required this.bills, required this.onRefresh});
+  const _ModernBillsList({required this.bills, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    
-    if (bills.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+              child: Text(
                 'Bollette in Scadenza',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface,
-                ),
+                style: Theme.of(context).textTheme.titleLarge,
+                overflow: TextOverflow.ellipsis,
               ),
-              TextButton(
-                onPressed: () async {
-                  await context.push('/bills');
-                  onRefresh();
-                },
-                child: const Text('Vedi tutto'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...bills.take(3).map((bill) {
-            final name = bill['name'] as String;
-            final amount = (bill['amount'] is num) 
-                ? (bill['amount'] as num).toDouble()
-                : double.tryParse(bill['amount'].toString()) ?? 0.0;
-            final dueDay = bill['due_day'] as int;
+            ),
+            TextButton(
+              onPressed: () async {
+                await context.push('/bills');
+                onRefresh();
+              },
+              child: const Text('Vedi tutto'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        ...bills.take(3).map((bill) {
+          final name = bill['name'] as String;
+          final amount = (bill['amount'] is num)
+              ? (bill['amount'] as num).toDouble()
+              : double.tryParse(bill['amount'].toString()) ?? 0.0;
+          final dueDay = bill['due_day'] as int;
 
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDark ? theme.scaffoldBackgroundColor : AppColors.background,
-                borderRadius: BorderRadius.circular(12),
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.warning.withOpacity(0.2),
+                width: 1.5,
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.warning.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.receipt, color: AppColors.warning),
+            ),
+            child: Row(
+              children: [
+                IconContainer(
+                  icon: Icons.receipt_rounded,
+                  color: AppColors.warning,
+                  size: 48,
+                  iconSize: 24,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Scadenza: $dueDay del mese',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                        Text(
-                          'Scadenza: $dueDay del mese',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
+                ),
+                Text(
+                  '€${amount.toStringAsFixed(2)}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.warning,
                   ),
-                  Text(
-                    '€${amount.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 }

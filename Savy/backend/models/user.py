@@ -23,6 +23,23 @@ class User(Base):
     ai_tips_enabled = Column(Boolean, default=True)
     optimization_alerts = Column(Boolean, default=True)
     saltedge_customer_id = Column(String(100), nullable=True, index=True)
+    
+    # Auth tokens
+    refresh_token = Column(String(500), nullable=True)  # Store refresh token
+    refresh_token_expires = Column(DateTime, nullable=True)
+    
+    # Email verification
+    email_verified = Column(Boolean, default=False)
+    email_verification_token = Column(String(100), nullable=True)
+    email_verification_expires = Column(DateTime, nullable=True)
+    
+    # Password reset
+    password_reset_token = Column(String(100), nullable=True)
+    password_reset_expires = Column(DateTime, nullable=True)
+    
+    # Push notifications
+    fcm_token = Column(String(255), nullable=True)  # Firebase Cloud Messaging token
+    
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     

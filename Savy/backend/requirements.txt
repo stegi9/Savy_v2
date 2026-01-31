@@ -49,5 +49,17 @@ pytest-cov==6.0.0
 gunicorn>=21.0.0
 uvloop>=0.19.0
 
-# Caching (Optional - for production)
+# Caching & Background Jobs
 redis>=5.0.0
+celery>=5.4.0
+flower>=2.0.1  # Celery monitoring
+
+# Email Service (Optional)
+sendgrid>=6.11.0
+python-decouple>=3.8
+
+# Error Monitoring (Optional)
+sentry-sdk[fastapi]>=2.19.0
+
+# Firebase Admin (for push notifications)
+firebase-admin>=6.5.0

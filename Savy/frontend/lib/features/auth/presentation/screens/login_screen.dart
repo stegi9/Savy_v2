@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/services/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
-
+import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/providers/app_providers.dart';
 import '../../../../core/services/storage_helper.dart';
 
@@ -68,25 +67,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         _emailController.text,
         _passwordController.text,
       );
-      await _storage.write(
-        key: 'access_token',
-        value: response['access_token'],
-      );
       
-      // Verify token is written
-      final verify = await _storage.read(key: 'access_token');
-      if (verify == null) {
-         throw Exception("Secure Storage Write Failed");
-      }
-      print("[Login] Token written successfully: ${verify.substring(0, 10)}...");
-
-      print("[Login] Token written successfully: ${verify.substring(0, 10)}...");
+      final token = response['access_token'] as String;
+      final userId = response['user_id'] as String? ?? '';
+      
+      // Update auth state (this also saves to secure storage)
+      await ref.read(authStateProvider.notifier).login(token, userId);
+      
+      print("[Login] Token saved and auth state updated");
 
       // Invalidate providers to force refresh with new token
       ref.invalidate(dashboardDataProvider);
-      
-      // Delay to ensure storage propagation?
-      await Future.delayed(const Duration(milliseconds: 500));
 
       if (mounted) {
         context.go('/dashboard');
@@ -123,10 +114,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         _nameController.text,
       );
 
-      await _storage.write(
-        key: 'access_token',
-        value: response['access_token'],
-      );
+      final token = response['access_token'] as String;
+      final userId = response['user_id'] as String? ?? '';
+      
+      // Update auth state (this also saves to secure storage)
+      await ref.read(authStateProvider.notifier).login(token, userId);
 
       if (mounted) {
         _showSnackBar('Account creato con successo!', isError: false);

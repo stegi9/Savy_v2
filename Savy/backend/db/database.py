@@ -26,8 +26,10 @@ logger.info("database_url_configured", url=safe_url)
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,  # Verify connections before using them
-    pool_size=10,
-    max_overflow=20,
+    pool_size=20,  # Increased from 10 for better concurrency
+    max_overflow=30,  # Increased from 20 for peak loads
+    pool_recycle=3600,  # Recycle connections every hour to prevent stale connections
+    pool_timeout=30,  # Wait up to 30s for a connection
     echo=False  # Set to True for SQL query logging
 )
 

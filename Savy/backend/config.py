@@ -32,7 +32,8 @@ class Settings(BaseSettings):
     # JWT
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60
+    access_token_expire_minutes: int = 1440  # 24 hours (more secure default)
+    refresh_token_expire_days: int = 30  # 30 days for refresh tokens
     
     # Affiliate APIs (Optional - falls back to mock if not set)
     amazon_access_key: str = ""
@@ -49,6 +50,32 @@ class Settings(BaseSettings):
     # API
     api_v1_prefix: str = "/api/v1"
     cors_origins: str = "http://localhost:3000,http://localhost:8080,http://10.0.2.2:8000"
+    frontend_url: str = "http://localhost:3000"  # For email links
+    
+    # Email (SMTP)
+    email_from: str = "noreply@savy.app"
+    email_from_name: str = "Savy - Personal Finance Coach"
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_use_tls: bool = True
+    
+    # Redis (for caching and rate limiting)
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_password: str = ""
+    redis_db: int = 0
+    
+    # Celery (for background jobs)
+    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/2"
+    
+    # Sentry (for error monitoring)
+    sentry_dsn: str = ""  # Optional
+    
+    # Firebase (for push notifications)
+    firebase_credentials_path: str = ""  # Path to firebase credentials JSON
     
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -25,9 +25,11 @@ class CategoriesScreen extends ConsumerWidget {
             return _buildEmptyState(context, ref, theme);
           }
 
-          // Extract used colors
+          // Extract used colors (handle null values)
           final usedColors = categories
-              .map((c) => c['color'] as String)
+              .map((c) => c['color'] as String?)
+              .where((c) => c != null)
+              .cast<String>()
               .toSet();
 
           return ListView.builder(
@@ -114,7 +116,9 @@ class CategoriesScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     
     final usedColors = existingCategories
-        .map((c) => c['color'] as String)
+        .map((c) => c['color'] as String?)
+        .where((c) => c != null)
+        .cast<String>()
         .toSet();
 
     final nameController = TextEditingController();
@@ -469,8 +473,12 @@ class _CategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _hexToColor(category['color'] as String? ?? '#3B82F6');
+    final colorHex = category['color']?.toString() ?? '#3B82F6';
+    final color = _hexToColor(colorHex);
     final theme = Theme.of(context);
+    final name = category['name']?.toString() ?? 'Categoria';
+    final icon = category['icon']?.toString() ?? 'category';
+    final budget = category['budget_monthly'] ?? 0;
     
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -494,10 +502,10 @@ class _CategoryCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: color.withOpacity(0.2)),
           ),
-          child: Icon(_getIconData(category['icon']), color: color, size: 24),
+          child: Icon(_getIconData(icon), color: color, size: 24),
         ),
         title: Text(
-          category['name'],
+          name,
           style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 16,
@@ -505,7 +513,7 @@ class _CategoryCard extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          'Budget: €${category['budget_monthly']}',
+          'Budget: €$budget',
           style: const TextStyle(
             fontSize: 14,
             color: AppColors.textSecondary,

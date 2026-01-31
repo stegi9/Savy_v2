@@ -1,169 +1,177 @@
-# Savy - Production Docker Compose
-# Scalable architecture for multi-user support with zero latency
 version: '3.8'
 
 services:
-  # =============================================================================
-  # BACKEND API (Scalable)
-  # =============================================================================
-  api:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.prod
-    environment:
-      - MYSQL_HOST=db
-      - MYSQL_PORT=3306
-      - MYSQL_USER=savy_user
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_DATABASE=savy_db
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - SALTEDGE_APP_ID=${SALTEDGE_APP_ID:-dummy}
-      - SALTEDGE_SECRET=${SALTEDGE_SECRET:-dummy}
-      - REDIS_URL=redis://redis:6379/0
-      - ENVIRONMENT=production
-      - DEBUG=false
-      # Affiliate APIs (optional)
-      - AMAZON_ACCESS_KEY=${AMAZON_ACCESS_KEY:-}
-      - AMAZON_SECRET_KEY=${AMAZON_SECRET_KEY:-}
-      - AMAZON_PARTNER_TAG=${AMAZON_PARTNER_TAG:-savy-21}
-      - BOOKING_AFFILIATE_ID=${BOOKING_AFFILIATE_ID:-}
-      - BOOKING_API_KEY=${BOOKING_API_KEY:-}
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    deploy:
-      replicas: 2  # Scale horizontally
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-    networks:
-      - savy-network
-
-  # =============================================================================
-  # NGINX LOAD BALANCER
-  # =============================================================================
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - api
-    healthcheck:
-      test: ["CMD", "nginx", "-t"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    networks:
-      - savy-network
-
-  # =============================================================================
-  # MYSQL DATABASE
-  # =============================================================================
-  db:
+  # MySQL Database
+  mysql:
     image: mysql:8.0
+    container_name: savy_mysql
+    restart: unless-stopped
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=savy_db
-      - MYSQL_USER=savy_user
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-savy_db}
+      MYSQL_USER: ${MYSQL_USER:-savy_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-savy_password}
+    ports:
+      - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./db/init:/docker-entrypoint-initdb.d
+      - ./backend/db/mysql_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    networks:
+      - savy_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
-    networks:
-      - savy-network
 
-  # =============================================================================
-  # REDIS (Caching & Rate Limiting)
-  # =============================================================================
+  # Redis Cache
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    container_name: savy_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - savy_network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 5s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-    networks:
-      - savy-network
+      timeout: 3s
+      retries: 5
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_secret}
 
-  # =============================================================================
-  # BACKGROUND WORKER (Async Tasks)
-  # =============================================================================
-  worker:
+  # Backend API (FastAPI)
+  backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile.prod
-    command: python worker.py
-    environment:
-      - MYSQL_HOST=db
-      - MYSQL_PORT=3306
-      - MYSQL_USER=savy_user
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_DATABASE=savy_db
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - REDIS_URL=redis://redis:6379/0
-      - ENVIRONMENT=production
+      dockerfile: Dockerfile
+    container_name: savy_backend
+    restart: unless-stopped
     depends_on:
-      db:
+      mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
-    deploy:
-      replicas: 1
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
+    environment:
+      # Database
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${MYSQL_USER:-savy_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-savy_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-savy_db}
+      
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_secret}
+      
+      # JWT
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 1440
+      REFRESH_TOKEN_EXPIRE_DAYS: 30
+      
+      # Google Gemini
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      
+      # Email (SendGrid/SMTP)
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@savy.app}
+      
+      # Sentry
+      SENTRY_DSN: ${SENTRY_DSN}
+      
+      # Environment
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080,http://10.0.2.2:8000}
+      
+      # Salt Edge (Bank Integration - mock for now)
+      SALT_EDGE_APP_ID: ${SALT_EDGE_APP_ID:-mock}
+      SALT_EDGE_SECRET: ${SALT_EDGE_SECRET:-mock}
+      
+      # Affiliate APIs
+      AMAZON_ASSOCIATE_TAG: ${AMAZON_ASSOCIATE_TAG}
+      BOOKING_AFFILIATE_ID: ${BOOKING_AFFILIATE_ID}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - backend_logs:/app/logs
     networks:
-      - savy-network
+      - savy_network
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
-# =============================================================================
-# VOLUMES
-# =============================================================================
+  # Celery Worker (Background Jobs)
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: savy_celery_worker
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - mysql
+      - backend
+    environment:
+      # Same as backend
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${MYSQL_USER:-savy_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-savy_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-savy_db}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_secret}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@savy.app}
+      SENTRY_DSN: ${SENTRY_DSN}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    volumes:
+      - ./backend:/app
+      - backend_logs:/app/logs
+    networks:
+      - savy_network
+    command: celery -A worker.celery_app worker --loglevel=info --concurrency=2
+
+  # Celery Beat (Scheduled Tasks)
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: savy_celery_beat
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - mysql
+      - backend
+    environment:
+      # Same as backend
+      MYSQL_HOST: mysql
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_secret}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    volumes:
+      - ./backend:/app
+      - backend_logs:/app/logs
+    networks:
+      - savy_network
+    command: celery -A worker.celery_app beat --loglevel=info
+
+networks:
+  savy_network:
+    driver: bridge
+
 volumes:
   mysql_data:
-    driver: local
   redis_data:
-    driver: local
-
-# =============================================================================
-# NETWORKS
-# =============================================================================
-networks:
-  savy-network:
-    driver: bridge
+  backend_logs:

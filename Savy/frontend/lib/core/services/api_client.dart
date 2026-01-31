@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-// Import BankInstitution
+import 'package:logger/logger.dart';
 
 import 'package:savy_frontend/core/services/storage_helper.dart';
 
@@ -8,6 +8,15 @@ import 'package:savy_frontend/core/services/storage_helper.dart';
 class ApiClient {
   final Dio _dio;
   final FlutterSecureStorage _storage;
+  final Logger _logger = Logger(
+    printer: PrettyPrinter(
+      methodCount: 0,
+      errorMethodCount: 5,
+      lineLength: 50,
+      colors: true,
+      printEmojis: true,
+    ),
+  );
 
   ApiClient({
     required String baseUrl,
@@ -39,35 +48,34 @@ class ApiClient {
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         // Inject JWT token
-        print('[ApiClient] reading token from storage...');
         final token = await _storage.read(key: 'access_token');
         
         if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
-          print('[ApiClient] ✅ TOKEN FOUND and injected into headers.');
-          // Safely print substring
-          final authHeader = options.headers['Authorization'] as String;
-          final preview = authHeader.length > 15 ? authHeader.substring(0, 15) : authHeader;
-          print('[ApiClient] Header Value: $preview...');
+          _logger.d('Token injected into request headers');
         } else {
-          print('[ApiClient] ❌ NO TOKEN FOUND in storage (or empty).');
+          _logger.w('No auth token found in storage');
         }
         
-        print('[ApiClient] Request URI: ${options.uri}');
+        _logger.d('Request: ${options.method} ${options.uri}');
         return handler.next(options);
       },
       onResponse: (response, handler) {
-        print('[ApiClient] Response Status: ${response.statusCode}');
+        _logger.d('Response: ${response.statusCode} from ${response.requestOptions.uri}');
         return handler.next(response);
       },
       onError: (error, handler) async {
-        print('[ApiClient] ❌ Request Error: ${error.message}');
-        print('[ApiClient] Error Status: ${error.response?.statusCode}');
+        _logger.e(
+          'Request failed: ${error.message}',
+          error: error.error,
+          stackTrace: error.stackTrace,
+        );
 
         // Handle 401 (token expired)
         if (error.response?.statusCode == 401) {
+          _logger.w('Unauthorized - clearing token');
           await _storage.delete(key: 'access_token');
-          // TODO: Navigate to login screen
+          // Navigation to login should be handled by the UI layer
         }
 
         return handler.next(error);

@@ -31,12 +31,29 @@ dependencies:
 
   # Secure Storage
   flutter_secure_storage: ^9.0.0
+  
+  # Biometric Auth
+  local_auth: ^2.1.8
+  local_auth_android: ^1.0.38
+  local_auth_darwin: ^1.2.3
+  
+  # Offline Storage
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.2
+  
+  # Firebase (Push Notifications)
+  firebase_core: ^2.24.2
+  firebase_messaging: ^14.7.10
 
   # UI
   google_fonts: ^6.1.0
   flutter_svg: ^2.0.9
   intl: ^0.18.1
   fl_chart: ^0.66.0
+  flutter_animate: ^4.5.0
+  glassmorphism: ^3.0.0
+  shimmer: ^3.0.0
 
   # Notifications
   # flutter_local_notifications: ^15.1.0  # TEMPORANEAMENTE DISABILITATO - Bug con Java 17
@@ -51,10 +68,20 @@ dependencies:
   # Utilities
   logger: ^2.0.2
   equatable: ^2.0.5
+  
+  # Splash Screen
+  flutter_native_splash: ^2.3.10
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  
+  # Integration Tests
+  integration_test:
+    sdk: flutter
+  
+  # Hive Code Generation
+  hive_generator: ^2.0.1
 
   # Code Generation
   riverpod_generator: ^2.3.9

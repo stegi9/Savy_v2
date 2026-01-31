@@ -1,7 +1,7 @@
 """
 Pydantic schemas for request/response validation.
 """
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal
@@ -27,20 +27,119 @@ class LoginRequest(BaseModel):
     """Login request payload."""
     email: str = Field(..., description="User email")
     password: str = Field(..., description="User password", min_length=6)
+    
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        """Validate and normalize email."""
+        from utils.validators import validate_email
+        if not validate_email(v):
+            raise ValueError("Formato email non valido")
+        return v.lower().strip()
 
 
 class RegisterRequest(BaseModel):
     """Registration request payload."""
     email: str
-    password: str = Field(..., min_length=6)
-    full_name: str
+    password: str = Field(..., min_length=8)
+    full_name: str = Field(..., min_length=2, max_length=100)
+    
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        """Validate and normalize email."""
+        from utils.validators import validate_email
+        if not validate_email(v):
+            raise ValueError("Formato email non valido")
+        return v.lower().strip()
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """Validate password strength."""
+        from utils.validators import validate_password_strength
+        is_valid, error_msg = validate_password_strength(v)
+        if not is_valid:
+            raise ValueError(error_msg)
+        return v
+    
+    @field_validator('full_name')
+    @classmethod
+    def validate_full_name(cls, v: str) -> str:
+        """Sanitize and validate full name."""
+        from utils.validators import sanitize_string
+        sanitized = sanitize_string(v, max_length=100)
+        if len(sanitized) < 2:
+            raise ValueError("Nome deve essere di almeno 2 caratteri")
+        return sanitized
 
 
 class TokenResponse(BaseModel):
     """JWT token response."""
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
-    expires_in: int
+    expires_in: int  # Access token expiry in seconds
+    user_id: str  # User ID for client storage
+
+
+class RefreshTokenRequest(BaseModel):
+    """Refresh token request."""
+    refresh_token: str = Field(..., description="Refresh token from login")
+
+
+class PasswordResetRequest(BaseModel):
+    """Password reset request (initiate)."""
+    email: str = Field(..., description="User email")
+    
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        """Validate and normalize email."""
+        from utils.validators import validate_email
+        if not validate_email(v):
+            raise ValueError("Formato email non valido")
+        return v.lower().strip()
+
+
+class PasswordResetConfirm(BaseModel):
+    """Password reset confirmation."""
+    token: str = Field(..., description="Reset token from email")
+    new_password: str = Field(..., min_length=8, description="New password")
+    
+    @field_validator('new_password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """Validate password strength."""
+        from utils.validators import validate_password_strength
+        is_valid, error_msg = validate_password_strength(v)
+        if not is_valid:
+            raise ValueError(error_msg)
+        return v
+
+
+class EmailVerificationRequest(BaseModel):
+    """Email verification request."""
+    token: str = Field(..., description="Verification token from email")
+
+
+class ResendVerificationRequest(BaseModel):
+    """Resend verification email request."""
+    email: str = Field(..., description="User email")
+    
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        """Validate and normalize email."""
+        from utils.validators import validate_email
+        if not validate_email(v):
+            raise ValueError("Formato email non valido")
+        return v.lower().strip()
+
+
+class FCMTokenUpdate(BaseModel):
+    """FCM token update for push notifications."""
+    fcm_token: str = Field(..., description="Firebase Cloud Messaging token")
 
 
 # ============================================================================
@@ -96,6 +195,29 @@ class TransactionCreate(BaseModel):
     description: Optional[str] = None
     transaction_date: date
     is_recurring: bool = False
+    
+    @field_validator('amount')
+    @classmethod
+    def validate_amount(cls, v: Decimal) -> Decimal:
+        """Validate amount is positive and reasonable."""
+        from utils.validators import validate_amount
+        is_valid, error_msg = validate_amount(float(v))
+        if not is_valid:
+            raise ValueError(error_msg)
+        return v
+    
+    @field_validator('description')
+    @classmethod
+    def sanitize_description(cls, v: Optional[str]) -> Optional[str]:
+        """Sanitize description text."""
+        if v:
+            from utils.validators import sanitize_string, validate_transaction_description
+            sanitized = sanitize_string(v, max_length=200)
+            is_valid, error_msg = validate_transaction_description(sanitized)
+            if not is_valid:
+                raise ValueError(error_msg)
+            return sanitized
+        return v
 
 
 class TransactionResponse(BaseModel):
@@ -125,6 +247,25 @@ class BillCreate(BaseModel):
     category: str
     provider: Optional[str] = None
     is_active: bool = True
+    
+    @field_validator('amount')
+    @classmethod
+    def validate_amount(cls, v: Decimal) -> Decimal:
+        """Validate amount is positive."""
+        from utils.validators import validate_amount
+        is_valid, error_msg = validate_amount(float(v))
+        if not is_valid:
+            raise ValueError(error_msg)
+        return v
+    
+    @field_validator('name', 'provider')
+    @classmethod
+    def sanitize_text(cls, v: Optional[str]) -> Optional[str]:
+        """Sanitize text fields."""
+        if v:
+            from utils.validators import sanitize_string
+            return sanitize_string(v, max_length=100)
+        return v
 
 
 class BillResponse(BaseModel):
@@ -178,6 +319,17 @@ class ChatRequest(BaseModel):
     """Chat request to the AI agent."""
     message: str = Field(..., min_length=1, max_length=1000)
     context: Optional[Dict[str, Any]] = None
+    
+    @field_validator('message')
+    @classmethod
+    def validate_message(cls, v: str) -> str:
+        """Validate and sanitize chat message."""
+        from utils.validators import validate_user_query, sanitize_string
+        sanitized = sanitize_string(v, max_length=1000)
+        is_valid, error_msg = validate_user_query(sanitized)
+        if not is_valid:
+            raise ValueError(error_msg)
+        return sanitized
 
 
 class ChatResponse(BaseModel):
@@ -297,6 +449,29 @@ class UserCategoryCreate(BaseModel):
     color: Optional[str] = Field(None, pattern="^#[0-9A-Fa-f]{6}$", description="Hex color")
     category_type: str = Field("expense", description="Category type: 'expense' or 'income'")
     budget_monthly: Optional[Decimal] = Field(None, ge=0, description="Monthly budget")
+    
+    @field_validator('name')
+    @classmethod
+    def validate_category_name(cls, v: str) -> str:
+        """Validate and sanitize category name."""
+        from utils.validators import validate_category_name, sanitize_string
+        sanitized = sanitize_string(v, max_length=50)
+        is_valid, error_msg = validate_category_name(sanitized)
+        if not is_valid:
+            raise ValueError(error_msg)
+        return sanitized
+    
+    @field_validator('color')
+    @classmethod
+    def validate_color(cls, v: Optional[str]) -> Optional[str]:
+        """Validate hex color format."""
+        if v:
+            from utils.validators import validate_hex_color
+            is_valid, error_msg = validate_hex_color(v)
+            if not is_valid:
+                raise ValueError(error_msg)
+            return v.upper()
+        return v
 
 
 class UserCategoryUpdate(BaseModel):
