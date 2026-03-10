@@ -263,7 +263,8 @@ async def refresh_access_token(
         access_token=access_token,
         refresh_token=request.refresh_token,  # Return same refresh token
         token_type="bearer",
-        expires_in=settings.access_token_expire_minutes * 60
+        expires_in=settings.access_token_expire_minutes * 60,
+        user_id=user.id
     )
 
 
