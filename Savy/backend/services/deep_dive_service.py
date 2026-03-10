@@ -22,7 +22,8 @@ class DeepDiveService:
     def generate_deep_dive(
         self,
         user_id: str,
-        period: str = "monthly"
+        period: str = "monthly",
+        bank_account_id: str = None
     ) -> Dict[str, Any]:
         """
         Generate deep dive analytics with AI insights.
@@ -30,6 +31,7 @@ class DeepDiveService:
         Args:
             user_id: User ID
             period: 'monthly', '3months', 'yearly'
+            bank_account_id: Optional bank account ID
             
         Returns:
             Deep dive analytics data
@@ -55,14 +57,16 @@ class DeepDiveService:
             current_categories = self.report_repo.get_spending_by_category(
                 user_id=user_id,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
+                bank_account_id=bank_account_id
             )
             
             # Get previous period spending by category
             previous_categories = self.report_repo.get_spending_by_category(
                 user_id=user_id,
                 start_date=previous_start,
-                end_date=previous_end
+                end_date=previous_end,
+                bank_account_id=bank_account_id
             )
             
             # Create lookup for previous spending
@@ -79,7 +83,8 @@ class DeepDiveService:
             total_income = self.report_repo.get_total_income(
                 user_id=user_id,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
+                bank_account_id=bank_account_id
             )
             
             # Calculate spending velocity and projection
@@ -129,7 +134,8 @@ class DeepDiveService:
                     user_id=user_id,
                     category_id=cat_id,
                     start_date=trend_start,
-                    end_date=end_date
+                    end_date=end_date,
+                    bank_account_id=bank_account_id
                 )
                 
                 categories_comparison.append({
@@ -148,14 +154,16 @@ class DeepDiveService:
             current_cumulative = self.report_repo.get_daily_cumulative_spending(
                 user_id=user_id,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
+                bank_account_id=bank_account_id
             )
             
             # Get cumulative spending data for previous period (for comparison)
             previous_cumulative = self.report_repo.get_daily_cumulative_spending(
                 user_id=user_id,
                 start_date=previous_start,
-                end_date=previous_end
+                end_date=previous_end,
+                bank_account_id=bank_account_id
             )
             
             # Generate AI Insights

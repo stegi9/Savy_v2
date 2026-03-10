@@ -44,6 +44,7 @@ class User(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # Relationships
+    accounts = relationship("BankAccount", back_populates="user", cascade="all, delete-orphan")
     categories = relationship("UserCategory", back_populates="user", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
     recurring_bills = relationship("RecurringBill", back_populates="user", cascade="all, delete-orphan")

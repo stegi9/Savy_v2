@@ -122,19 +122,31 @@ async def sync_bank_data(
                 acc_provider_id = str(acc_data["id"])
                 bank_account = db.query(BankAccount).filter_by(provider_account_id=acc_provider_id).first()
                 
+                new_acc_balance = float(acc_data.get("balance") or 0)
+                
                 if not bank_account:
                     bank_account = BankAccount(
                         connection_id=connection.id,
                         provider_account_id=acc_provider_id,
                         name=acc_data.get("name"),
                         currency=acc_data.get("currency_code"),
-                        balance=acc_data.get("balance"),
+                        balance=new_acc_balance,
                         nature=acc_data.get("nature")
                     )
                     db.add(bank_account)
+                    
+                    # Aggiungi il nuovo saldo al bilancio totale dell'utente
+                    current_user.current_balance = float(current_user.current_balance or 0) + new_acc_balance
+                    
                     db.commit() # Commit to get ID
                 else:
-                    bank_account.balance = acc_data.get("balance")
+                    # Calcola la differenza e aggiorna il bilancio globale
+                    old_acc_balance = float(bank_account.balance or 0)
+                    balance_delta = new_acc_balance - old_acc_balance
+                    
+                    bank_account.balance = new_acc_balance
+                    current_user.current_balance = float(current_user.current_balance or 0) + balance_delta
+                    
                     db.commit()
 
                 # 3. Sync Transactions

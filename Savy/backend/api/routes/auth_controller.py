@@ -121,7 +121,7 @@ async def register(
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            expires_in=15 * 60,  # 15 minutes
+            expires_in=settings.access_token_expire_minutes * 60,
             user_id=user.id
         )
     
@@ -180,7 +180,7 @@ async def login(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
-        expires_in=15 * 60,  # 15 minutes
+        expires_in=settings.access_token_expire_minutes * 60,
         user_id=user.id
     )
 
@@ -263,7 +263,7 @@ async def refresh_access_token(
         access_token=access_token,
         refresh_token=request.refresh_token,  # Return same refresh token
         token_type="bearer",
-        expires_in=15 * 60  # 15 minutes
+        expires_in=settings.access_token_expire_minutes * 60
     )
 
 

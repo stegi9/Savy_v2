@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/app_providers.dart';
 import '../../../../core/l10n/app_strings.dart';
 import '../widgets/cumulative_chart_widgets.dart';
+import '../../../../features/accounts/data/providers/account_provider.dart';
 
 class DeepDiveScreen extends ConsumerStatefulWidget {
   const DeepDiveScreen({super.key});
@@ -69,6 +70,9 @@ class _DeepDiveScreenState extends ConsumerState<DeepDiveScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Account Filter
+          _buildAccountFilter(context),
+          
           // Period Selector
           _buildPeriodSelector(theme),
           
@@ -90,6 +94,72 @@ class _DeepDiveScreenState extends ConsumerState<DeepDiveScreen> {
           const SizedBox(height: 24),
         ],
       ),
+    );
+  }
+
+  Widget _buildAccountFilter(BuildContext context) {
+    final theme = Theme.of(context);
+    final accountsAsync = ref.watch(accountsProvider);
+    final selectedAccountId = ref.watch(selectedAccountIdProvider);
+
+    return accountsAsync.when(
+      data: (accounts) {
+        if (accounts.isEmpty) return const SizedBox.shrink();
+        
+        return Container(
+          height: 56,
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            border: Border(bottom: BorderSide(color: theme.dividerColor.withOpacity(0.1))),
+          ),
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: const Text('Tutti i conti'),
+                  selected: selectedAccountId == null,
+                  onSelected: (selected) {
+                    if (selected) {
+                      ref.read(selectedAccountIdProvider.notifier).state = null;
+                    }
+                  },
+                  selectedColor: theme.colorScheme.primaryContainer,
+                  labelStyle: TextStyle(
+                    color: selectedAccountId == null 
+                        ? theme.colorScheme.onPrimaryContainer
+                        : theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              ...accounts.map((account) {
+                final isSelected = selectedAccountId == account.id;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(account.name ?? 'Conto'),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      ref.read(selectedAccountIdProvider.notifier).state = 
+                          selected ? account.id : null;
+                    },
+                    selectedColor: theme.colorScheme.primaryContainer,
+                    labelStyle: TextStyle(
+                      color: isSelected 
+                          ? theme.colorScheme.onPrimaryContainer
+                          : theme.colorScheme.onSurface,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox(height: 56, child: Center(child: CircularProgressIndicator())),
+      error: (_, __) => const SizedBox.shrink(),
     );
   }
 

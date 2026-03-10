@@ -24,8 +24,8 @@ class ApiClient {
   })  : _storage = storage ?? StorageHelper.instance,
         _dio = Dio(BaseOptions(
           baseUrl: baseUrl,
-          connectTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
+          connectTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 60),
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
@@ -42,6 +42,14 @@ class ApiClient {
 
   Future<Response> post(String path, {Object? data, Map<String, dynamic>? queryParameters}) async {
     return _dio.post(path, data: data, queryParameters: queryParameters);
+  }
+
+  Future<Response> put(String path, {Object? data, Map<String, dynamic>? queryParameters}) async {
+    return _dio.put(path, data: data, queryParameters: queryParameters);
+  }
+
+  Future<Response> delete(String path, {Object? data, Map<String, dynamic>? queryParameters}) async {
+    return _dio.delete(path, data: data, queryParameters: queryParameters);
   }
 
   void _setupInterceptors() {
@@ -73,8 +81,45 @@ class ApiClient {
 
         // Handle 401 (token expired)
         if (error.response?.statusCode == 401) {
-          _logger.w('Unauthorized - clearing token');
+          final isRefreshRequest = error.requestOptions.path.contains('/auth/refresh');
+          
+          if (!isRefreshRequest) {
+            final refreshToken = await _storage.read(key: 'refresh_token');
+            if (refreshToken != null && refreshToken.isNotEmpty) {
+              try {
+                _logger.i('Attempting to refresh token...');
+                
+                final refreshDio = Dio(BaseOptions(baseUrl: _dio.options.baseUrl));
+                final refreshResponse = await refreshDio.post(
+                  '/auth/refresh',
+                  data: {'refresh_token': refreshToken},
+                );
+                
+                if (refreshResponse.statusCode == 200) {
+                  final newAccessToken = refreshResponse.data['access_token'];
+                  final newRefreshToken = refreshResponse.data['refresh_token'] ?? refreshToken;
+                  
+                  await _storage.write(key: 'access_token', value: newAccessToken);
+                  await _storage.write(key: 'refresh_token', value: newRefreshToken);
+                  
+                  _logger.i('Token refreshed successfully. Retrying request.');
+                  
+                  // Retry original request
+                  final opts = error.requestOptions;
+                  opts.headers['Authorization'] = 'Bearer $newAccessToken';
+                  
+                  final retryResponse = await _dio.fetch(opts);
+                  return handler.resolve(retryResponse);
+                }
+              } catch (e) {
+                _logger.w('Failed to refresh token: $e');
+              }
+            }
+          }
+
+          _logger.w('Unauthorized - clearing tokens');
           await _storage.delete(key: 'access_token');
+          await _storage.delete(key: 'refresh_token');
           // Navigation to login should be handled by the UI layer
         }
 
@@ -165,9 +210,10 @@ class ApiClient {
   // TRANSACTIONS
   // ============================================================================
 
-  Future<List<dynamic>> getTransactions({String? categoryId}) async {
+  Future<List<dynamic>> getTransactions({String? categoryId, String? bankAccountId}) async {
     final response = await _dio.get('/transactions', queryParameters: {
       if (categoryId != null) 'category_id': categoryId,
+      if (bankAccountId != null) 'bank_account_id': bankAccountId,
     });
     // Backend returns {success: true, data: {transactions: [...], count: N}}
     final data = response.data['data'];
@@ -180,6 +226,7 @@ class ApiClient {
     String? categoryId,
     String transactionType = 'expense',
     DateTime? transactionDate,
+    String? bankAccountId,
   }) async {
     final date = transactionDate ?? DateTime.now();
     final response = await _dio.post('/transactions/', data: {
@@ -187,6 +234,7 @@ class ApiClient {
       'amount': amount,
       'transaction_type': transactionType,
       'date': '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}', // YYYY-MM-DD format
+      'bank_account_id': bankAccountId,
       'auto_categorize': true,
     });
     return response.data;
@@ -245,9 +293,10 @@ class ApiClient {
   // REPORTS
   // ============================================================================
 
-  Future<Map<String, dynamic>> getSpendingReport({String period = 'monthly'}) async {
+  Future<Map<String, dynamic>> getSpendingReport({String period = 'monthly', String? bankAccountId}) async {
     final response = await _dio.post('/reports/spending', data: {
       'period': period,
+      if (bankAccountId != null) 'bank_account_id': bankAccountId,
     });
     return response.data;
   }
@@ -256,9 +305,10 @@ class ApiClient {
   // ANALYTICS (DEEP DIVE)
   // ============================================================================
 
-  Future<Map<String, dynamic>> getDeepDiveAnalytics({String period = 'monthly'}) async {
+  Future<Map<String, dynamic>> getDeepDiveAnalytics({String period = 'monthly', String? bankAccountId}) async {
     final response = await _dio.post('/analytics/deep-dive', data: {
       'period': period,
+      if (bankAccountId != null) 'bank_account_id': bankAccountId,
     });
     return response.data;
   }

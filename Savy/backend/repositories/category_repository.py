@@ -73,7 +73,12 @@ class CategoryRepository(BaseRepository[UserCategory]):
         """Create a new custom category with auto-assigned color if not provided."""
         # Auto-assign color if not provided
         final_color = color
-        if not final_color:
+        used_colors = self.get_used_colors(user_id)
+        
+        if final_color:
+            if final_color.upper() in used_colors:
+                raise ValueError("Colore già in uso per un'altra categoria")
+        else:
             final_color = self.get_next_available_color(user_id)
         
         return self.create({

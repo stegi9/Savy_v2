@@ -7,6 +7,7 @@ class TransactionModel {
   final String? categoryName;
   final String? categoryIcon;
   final String? categoryColor;
+  final String? bankAccountId;
   final String transactionType; // 'expense' or 'income'
   final DateTime transactionDate;
   final DateTime createdAt;
@@ -21,6 +22,7 @@ class TransactionModel {
     this.categoryName,
     this.categoryIcon,
     this.categoryColor,
+    this.bankAccountId,
     required this.transactionType,
     required this.transactionDate,
     required this.createdAt,
@@ -37,6 +39,7 @@ class TransactionModel {
       categoryName: json['category_name'] as String? ?? json['category'] as String?,
       categoryIcon: json['category_icon'] as String?,
       categoryColor: json['category_color'] as String?,
+      bankAccountId: json['bank_account_id'] as String?,
       transactionType: json['transaction_type'] as String? ?? 'expense',
       transactionDate: DateTime.parse(json['date'] as String? ?? json['transaction_date'] as String),
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -57,6 +60,7 @@ class TransactionModel {
       'amount': amount,
       'description': description,
       'category_id': categoryId,
+      'bank_account_id': bankAccountId,
       'transaction_type': transactionType,
       'transaction_date': transactionDate.toIso8601String(),
     };

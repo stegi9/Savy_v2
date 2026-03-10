@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/app_providers.dart';
 import '../../../../core/l10n/app_strings.dart';
 import '../../data/models/transaction_model.dart';
+import '../../../../features/accounts/data/providers/account_provider.dart';
 
 class TransactionsScreen extends ConsumerStatefulWidget {
   const TransactionsScreen({super.key});
@@ -43,47 +44,54 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           ),
         ],
       ),
-      body: transactionsAsync.when(
-        data: (transactions) {
-          final List<TransactionModel> transactionModels =
-              transactions.map((t) => TransactionModel.fromJson(t)).toList();
+      body: Column(
+        children: [
+          _buildAccountFilter(context),
+          Expanded(
+            child: transactionsAsync.when(
+              data: (transactions) {
+                final List<TransactionModel> transactionModels =
+                    transactions.map((t) => TransactionModel.fromJson(t)).toList();
 
-          final filtered = transactionModels.where((t) {
-            if (_filter == 'review') return t.needsReview || t.categoryId == null;
-            if (_filter == 'income') return t.transactionType == 'income';
-            if (_filter == 'expense') return t.transactionType == 'expense';
-            return true;
-          }).toList();
+                final filtered = transactionModels.where((t) {
+                  if (_filter == 'review') return t.needsReview || t.categoryId == null;
+                  if (_filter == 'income') return t.transactionType == 'income';
+                  if (_filter == 'expense') return t.transactionType == 'expense';
+                  return true;
+                }).toList();
 
-          if (filtered.isEmpty) {
-            return _buildEmptyState(theme);
-          }
+                if (filtered.isEmpty) {
+                  return _buildEmptyState(theme);
+                }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(transactionsProvider);
-            },
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: filtered.length,
-              itemBuilder: (context, index) {
-                final transaction = filtered[index];
-                return _TransactionCard(
-                  key: ValueKey('card_${transaction.id}'),
-                  transaction: transaction,
-                  onDelete: () async {
-                    return await _deleteTransaction(transaction.id);
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    ref.invalidate(transactionsProvider);
                   },
-                  onEdit: () async {
-                    await _showCategoryPicker(transaction);
-                  },
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final transaction = filtered[index];
+                      return _TransactionCard(
+                        key: ValueKey('card_${transaction.id}'),
+                        transaction: transaction,
+                        onDelete: () async {
+                          return await _deleteTransaction(transaction.id);
+                        },
+                        onEdit: () async {
+                          await _showCategoryPicker(transaction);
+                        },
+                      );
+                    },
+                  ),
                 );
               },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, s) => Center(child: Text('Errore: $e', style: TextStyle(color: theme.colorScheme.error))),
             ),
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, s) => Center(child: Text('Errore: $e', style: TextStyle(color: theme.colorScheme.error))),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddTransactionDialog,
@@ -91,6 +99,72 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
         icon: Icon(Icons.add, color: theme.colorScheme.onPrimary),
         label: Text(AppStrings.get('newButton'), style: TextStyle(color: theme.colorScheme.onPrimary)),
       ),
+    );
+  }
+
+  Widget _buildAccountFilter(BuildContext context) {
+    final theme = Theme.of(context);
+    final accountsAsync = ref.watch(accountsProvider);
+    final selectedAccountId = ref.watch(selectedAccountIdProvider);
+
+    return accountsAsync.when(
+      data: (accounts) {
+        if (accounts.isEmpty) return const SizedBox.shrink();
+        
+        return Container(
+          height: 56,
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            border: Border(bottom: BorderSide(color: theme.dividerColor.withOpacity(0.1))),
+          ),
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: const Text('Tutti i conti'),
+                  selected: selectedAccountId == null,
+                  onSelected: (selected) {
+                    if (selected) {
+                      ref.read(selectedAccountIdProvider.notifier).state = null;
+                    }
+                  },
+                  selectedColor: theme.colorScheme.primaryContainer,
+                  labelStyle: TextStyle(
+                    color: selectedAccountId == null 
+                        ? theme.colorScheme.onPrimaryContainer
+                        : theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              ...accounts.map((account) {
+                final isSelected = selectedAccountId == account.id;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(account.name ?? 'Conto'),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      ref.read(selectedAccountIdProvider.notifier).state = 
+                          selected ? account.id : null;
+                    },
+                    selectedColor: theme.colorScheme.primaryContainer,
+                    labelStyle: TextStyle(
+                      color: isSelected 
+                          ? theme.colorScheme.onPrimaryContainer
+                          : theme.colorScheme.onSurface,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox(height: 56, child: Center(child: CircularProgressIndicator())),
+      error: (_, __) => const SizedBox.shrink(),
     );
   }
 
@@ -320,7 +394,14 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
     final amountController = TextEditingController();
     final descController = TextEditingController();
     String transactionType = 'expense';
+    String? selectedAccountId;
     final theme = Theme.of(context);
+    final accountsState = ref.read(accountsProvider);
+    
+    // Default select the first account if available
+    if (selectedAccountId == null && accountsState is AsyncData && accountsState.value!.isNotEmpty) {
+      selectedAccountId = accountsState.value!.first.id;
+    }
 
     await showDialog(
       context: context,
@@ -349,6 +430,28 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 SegmentedButton<String>(
+                  style: ButtonStyle(
+                    backgroundColor: WidgetStateProperty.resolveWith<Color>(
+                      (Set<WidgetState> states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return transactionType == 'income'
+                              ? AppColors.success.withOpacity(0.2)
+                              : theme.colorScheme.error.withOpacity(0.2);
+                        }
+                        return Colors.transparent;
+                      },
+                    ),
+                    foregroundColor: WidgetStateProperty.resolveWith<Color>(
+                      (Set<WidgetState> states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return transactionType == 'income'
+                              ? AppColors.success
+                              : theme.colorScheme.error;
+                        }
+                        return theme.colorScheme.onSurface;
+                      },
+                    ),
+                  ),
                   segments: [
                     ButtonSegment(
                       value: 'expense',
@@ -366,6 +469,21 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                     setState(() => transactionType = newSelection.first);
                   },
                 ),
+                const SizedBox(height: 16),
+                if (accountsState is AsyncData && accountsState.value!.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    value: selectedAccountId,
+                    decoration: InputDecoration(
+                      labelText: 'Seleziona Conto',
+                      prefixIcon: Icon(Icons.account_balance_wallet, color: theme.colorScheme.primary),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    items: accountsState.value!.map((acc) => DropdownMenuItem(
+                      value: acc.id,
+                      child: Text(acc.name ?? 'Conto Sconosciuto'),
+                    )).toList(),
+                    onChanged: (v) => setState(() => selectedAccountId = v),
+                  ),
                 const SizedBox(height: 20),
                 TextField(
                   controller: amountController,
@@ -426,6 +544,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                   amount,
                   descController.text,
                   transactionType,
+                  selectedAccountId,
                 );
               },
               style: ElevatedButton.styleFrom(
@@ -441,7 +560,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   }
 
   Future<void> _createTransaction(
-      double amount, String description, String type) async {
+      double amount, String description, String type, String? bankAccountId) async {
     // Force refresh and wait for categories
     ref.invalidate(categoriesProvider);
     final categories = await ref.read(categoriesProvider.future);
@@ -517,6 +636,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
         amount: amount,
         description: description,
         transactionType: type,
+        bankAccountId: bankAccountId,
       );
       ref.invalidate(transactionsProvider);
       ref.invalidate(dashboardDataProvider);
@@ -731,14 +851,14 @@ class _TransactionCard extends StatelessWidget {
                   margin: const EdgeInsets.only(top: 6),
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    color: isIncome ? AppColors.success.withOpacity(0.1) : theme.colorScheme.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     transaction.categoryName!,
                     style: TextStyle(
                       fontSize: 11,
-                      color: theme.colorScheme.primary,
+                      color: isIncome ? AppColors.success : theme.colorScheme.primary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

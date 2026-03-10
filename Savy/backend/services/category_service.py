@@ -81,6 +81,12 @@ class CategoryService:
         if icon is not None:
             update_data["icon"] = icon
         if color is not None:
+            # Validate color uniqueness on update
+            existing_category = self.repo.get(category_id)
+            if existing_category and existing_category.color != color:
+                used_colors = self.repo.get_used_colors(user_id)
+                if color.upper() in used_colors:
+                    raise ValueError("Colore già in uso per un'altra categoria")
             update_data["color"] = color
         if budget_monthly is not None:
             update_data["budget_monthly"] = budget_monthly

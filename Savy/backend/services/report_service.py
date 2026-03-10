@@ -23,7 +23,8 @@ class ReportService:
         user_id: str,
         period: str = "monthly",
         start_date: datetime = None,
-        end_date: datetime = None
+        end_date: datetime = None,
+        bank_account_id: str = None
     ) -> Dict[str, Any]:
         """
         Generate a spending report for the user.
@@ -56,14 +57,16 @@ class ReportService:
             categories = self.report_repository.get_spending_by_category(
                 user_id=user_id,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
+                bank_account_id=bank_account_id
             )
             
             # Get total income for the period
             total_income = self.report_repository.get_total_income(
                 user_id=user_id,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
+                bank_account_id=bank_account_id
             )
             
             # Calculate totals

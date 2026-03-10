@@ -26,6 +26,7 @@ class SpendingReportRequest(BaseModel):
     period: str = Field("monthly", description="Report period: weekly, monthly, yearly, or custom")
     start_date: Optional[date] = Field(None, description="Start date for custom period")
     end_date: Optional[date] = Field(None, description="End date for custom period")
+    bank_account_id: Optional[str] = Field(None, description="Filter by specific bank account ID")
 
 
 @router.post("/spending", response_model=SpendingReportResponse)
@@ -68,7 +69,8 @@ async def get_spending_report(
             user_id=current_user.id,
             period=request.period,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            bank_account_id=request.bank_account_id
         )
         
         logger.info(

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/providers/app_providers.dart';
 import '../../../../core/providers/preferences_provider.dart';
+import '../../../../core/providers/auth_provider.dart';
+import '../../../../core/providers/app_providers.dart';
 import '../../../../core/l10n/app_strings.dart';
 import '../../../../core/services/biometric_auth_service.dart';
 
@@ -261,6 +262,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   isLoading: _isLoading,
                   onPressed: _saveSettings,
                 ),
+                const SizedBox(height: 24),
+                _LogoutButton(
+                  onPressed: () async {
+                    // Force the AuthProvider to logout
+                    await ref.read(authStateProvider.notifier).logout();
+                    // Invalidate other generic providers
+                    ref.invalidate(dashboardDataProvider);
+                    ref.invalidate(userSettingsProvider);
+
+                    if (mounted) {
+                      context.go('/login');
+                    }
+                  },
+                ),
+                const SizedBox(height: 32),
               ],
             ),
           );
@@ -516,6 +532,11 @@ class _SaveButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          textStyle: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -534,11 +555,59 @@ class _SaveButton extends StatelessWidget {
                 children: [
                   const Icon(Icons.save_outlined, color: Colors.white),
                   const SizedBox(width: 12),
-                  Text(
-                    AppStrings.get('save'),
-                  ),
+                  Text(AppStrings.get('save')),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+class _LogoutButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _LogoutButton({
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      width: double.infinity,
+      height: 56,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2C1E1E) : const Color(0xFFFFF0F0),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.error.withOpacity(0.5),
+          width: 1,
+        ),
+      ),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          foregroundColor: theme.colorScheme.error,
+          textStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.logout, color: theme.colorScheme.error),
+            const SizedBox(width: 12),
+            const Text('Logout'),
+          ],
+        ),
       ),
     );
   }

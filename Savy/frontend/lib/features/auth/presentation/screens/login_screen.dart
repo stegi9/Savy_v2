@@ -69,10 +69,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       );
       
       final token = response['access_token'] as String;
+      final refreshToken = response['refresh_token'] as String? ?? '';
       final userId = response['user_id'] as String? ?? '';
       
       // Update auth state (this also saves to secure storage)
-      await ref.read(authStateProvider.notifier).login(token, userId);
+      await ref.read(authStateProvider.notifier).login(token, refreshToken, userId);
       
       print("[Login] Token saved and auth state updated");
 
@@ -115,10 +116,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       );
 
       final token = response['access_token'] as String;
+      final refreshToken = response['refresh_token'] as String? ?? '';
       final userId = response['user_id'] as String? ?? '';
       
       // Update auth state (this also saves to secure storage)
-      await ref.read(authStateProvider.notifier).login(token, userId);
+      await ref.read(authStateProvider.notifier).login(token, refreshToken, userId);
 
       if (mounted) {
         _showSnackBar('Account creato con successo!', isError: false);

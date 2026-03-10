@@ -16,6 +16,7 @@ import 'features/optimization/presentation/screens/optimization_screen.dart';
 import 'features/analytics/presentation/screens/deep_dive_screen.dart';
 import 'features/bank_integration/presentation/bank_connect_screen.dart';
 import 'features/onboarding/presentation/screens/onboarding_screen.dart';
+import 'features/accounts/presentation/screens/accounts_screen.dart';
 
 import 'core/providers/preferences_provider.dart';
 import 'core/providers/auth_provider.dart';
@@ -114,6 +115,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/dashboard',
         builder: (context, state) => const DashboardScreen(),
+      ),
+      GoRoute(
+        path: '/accounts',
+        builder: (context, state) => const AccountsScreen(),
       ),
       GoRoute(
         path: '/transactions',

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/app_providers.dart';
 import '../../../../core/l10n/app_strings.dart';
+import 'package:dio/dio.dart';
 
 class CategoriesScreen extends ConsumerWidget {
   const CategoriesScreen({super.key});
@@ -30,10 +31,11 @@ class CategoriesScreen extends ConsumerWidget {
               .map((c) => c['color'] as String?)
               .where((c) => c != null)
               .cast<String>()
+              .map((c) => c.toUpperCase())
               .toSet();
 
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 88),
             itemCount: categories.length,
             itemBuilder: (context, index) {
               final cat = categories[index];
@@ -119,6 +121,7 @@ class CategoriesScreen extends ConsumerWidget {
         .map((c) => c['color'] as String?)
         .where((c) => c != null)
         .cast<String>()
+        .map((c) => c.toUpperCase())
         .toSet();
 
     final nameController = TextEditingController();
@@ -172,6 +175,28 @@ class CategoriesScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 SegmentedButton<String>(
+                  style: ButtonStyle(
+                    backgroundColor: WidgetStateProperty.resolveWith<Color>(
+                      (Set<WidgetState> states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return categoryType == 'income'
+                              ? AppColors.success.withOpacity(0.2)
+                              : theme.colorScheme.error.withOpacity(0.2);
+                        }
+                        return Colors.transparent;
+                      },
+                    ),
+                    foregroundColor: WidgetStateProperty.resolveWith<Color>(
+                      (Set<WidgetState> states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return categoryType == 'income'
+                              ? AppColors.success
+                              : theme.colorScheme.error;
+                        }
+                        return theme.colorScheme.onSurface;
+                      },
+                    ),
+                  ),
                   segments: [
                     ButtonSegment(
                       value: 'expense',
@@ -323,7 +348,28 @@ class CategoriesScreen extends ConsumerWidget {
                         ),
                       ),
                     );
-                  }).toList(),
+                  }).toList()
+                    ..add(
+                      InkWell(
+                        onTap: () async {
+                          final customHex = await _showCustomColorPicker(context, theme, usedColors);
+                          if (customHex != null) {
+                            setState(() => selectedColor = customHex);
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: theme.cardColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: theme.colorScheme.outline),
+                          ),
+                          child: Icon(Icons.palette_outlined, color: theme.colorScheme.onSurface, size: 20),
+                        ),
+                      ),
+                    ),
                 ),
               ],
             ),
@@ -392,14 +438,80 @@ class CategoriesScreen extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         final theme = Theme.of(context);
+        String errorMsg = e.toString();
+        
+        if (e is DioException && e.response?.data != null) {
+          final data = e.response!.data;
+          if (data is Map && data['detail'] != null) {
+            errorMsg = data['detail'];
+          }
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Errore: $e'),
+            content: Text('Errore: $errorMsg'),
             backgroundColor: theme.colorScheme.error,
           ),
         );
       }
     }
+  }
+
+  Future<String?> _showCustomColorPicker(BuildContext context, ThemeData theme, Set<String> usedColors) async {
+    final hexController = TextEditingController(text: '#');
+    String? errorMessage;
+    
+    return showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: theme.cardColor,
+          title: Text('Colore Personalizzato', style: TextStyle(color: theme.colorScheme.onSurface)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: hexController,
+                style: TextStyle(color: theme.colorScheme.onSurface),
+                decoration: InputDecoration(
+                  labelText: 'Codice HEX (es. #FF0000)',
+                  errorText: errorMessage,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onChanged: (val) {
+                  if (errorMessage != null) {
+                    setState(() => errorMessage = null);
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                String hex = hexController.text.trim().toUpperCase();
+                if (!hex.startsWith('#')) hex = '#$hex';
+                if (!RegExp(r'^#[0-9A-F]{6}$').hasMatch(hex)) {
+                  setState(() => errorMessage = 'Formato non valido');
+                  return;
+                }
+                if (usedColors.contains(hex)) {
+                  setState(() => errorMessage = 'Colore già in uso');
+                  return;
+                }
+                Navigator.pop(context, hex);
+              },
+              child: const Text('Conferma'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _deleteCategory(
@@ -478,6 +590,7 @@ class _CategoryCard extends StatelessWidget {
     final theme = Theme.of(context);
     final name = category['name']?.toString() ?? 'Categoria';
     final icon = category['icon']?.toString() ?? 'category';
+    final isIncome = (category['category_type']?.toString() ?? 'expense') == 'income';
     final budget = category['budget_monthly'] ?? 0;
     
     return Container(
@@ -504,16 +617,40 @@ class _CategoryCard extends StatelessWidget {
           ),
           child: Icon(_getIconData(icon), color: color, size: 24),
         ),
-        title: Text(
-          name,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 16,
-            color: theme.colorScheme.onSurface,
-          ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                name,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ),
+            if (isIncome)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text('Entrata', style: TextStyle(fontSize: 10, color: AppColors.success)),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.error.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('Spesa', style: TextStyle(fontSize: 10, color: theme.colorScheme.error)),
+              ),
+          ],
         ),
         subtitle: Text(
-          'Budget: €$budget',
+          isIncome ? 'Entrata stimata: €$budget' : 'Budget: €$budget',
           style: const TextStyle(
             fontSize: 14,
             color: AppColors.textSecondary,

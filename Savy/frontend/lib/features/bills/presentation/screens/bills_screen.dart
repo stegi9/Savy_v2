@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/app_providers.dart';
 import '../../../../core/l10n/app_strings.dart';
+import '../../../accounts/data/providers/account_provider.dart';
 
 class BillsScreen extends ConsumerWidget {
   const BillsScreen({super.key});
@@ -599,12 +600,69 @@ class BillsScreen extends ConsumerWidget {
         ? (bill['amount'] as num).toDouble()
         : double.tryParse(bill['amount'].toString()) ?? 0.0;
 
+    final theme = Theme.of(context);
+    final accountsState = ref.read(accountsProvider);
+    String? selectedAccountId = ref.read(selectedAccountIdProvider);
+
+    if (selectedAccountId == null && accountsState is AsyncData && accountsState.value!.isNotEmpty) {
+      selectedAccountId = accountsState.value!.first.id;
+    }
+
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: theme.cardColor,
+          title: Text('Registra pagamento', style: TextStyle(color: theme.colorScheme.onSurface)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Seleziona il conto da cui detrarre €${amount.toStringAsFixed(2)} per ${bill['name']}.'),
+              const SizedBox(height: 16),
+              if (accountsState is AsyncData && accountsState.value!.isNotEmpty)
+                DropdownButtonFormField<String>(
+                  value: selectedAccountId,
+                  decoration: InputDecoration(
+                    labelText: 'Seleziona Conto',
+                    prefixIcon: Icon(Icons.account_balance_wallet, color: theme.colorScheme.primary),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  items: accountsState.value!.map((acc) => DropdownMenuItem(
+                    value: acc.id,
+                    child: Text(acc.name ?? 'Conto Sconosciuto'),
+                  )).toList(),
+                  onChanged: (v) => setState(() => selectedAccountId = v),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annulla'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: theme.colorScheme.onPrimary,
+              ),
+              child: const Text('Conferma'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (proceed != true || selectedAccountId == null) return;
+
     try {
       final apiClient = ref.read(apiClientProvider);
       await apiClient.createTransaction(
         amount: amount,
         description: 'Pagamento ${bill['name']}',
         transactionType: 'expense',
+        bankAccountId: selectedAccountId,
       );
       ref.invalidate(billsProvider);
       ref.invalidate(dashboardDataProvider);

@@ -21,7 +21,8 @@ class TransactionRepository(BaseRepository[Transaction]):
         limit: int = 50, 
         needs_review: Optional[bool] = None,
         start_date: Optional[date] = None,
-        end_date: Optional[date] = None
+        end_date: Optional[date] = None,
+        bank_account_id: Optional[str] = None
     ) -> List[Transaction]:
         """Get user transactions ordered by date (most recent first)."""
         query = self.db.query(Transaction)\
@@ -35,20 +36,33 @@ class TransactionRepository(BaseRepository[Transaction]):
             
         if end_date:
             query = query.filter(Transaction.transaction_date <= end_date)
+            
+        if bank_account_id:
+            query = query.filter(Transaction.bank_account_id == bank_account_id)
         
         return query.order_by(Transaction.transaction_date.desc(), Transaction.created_at.desc())\
             .limit(limit)\
             .all()
     
-    def get_transactions_by_date_range(self, user_id: str, start_date: date, end_date: date) -> List[Transaction]:
+    def get_transactions_by_date_range(
+        self, 
+        user_id: str, 
+        start_date: date, 
+        end_date: date,
+        bank_account_id: Optional[str] = None
+    ) -> List[Transaction]:
         """Get transactions within a date range."""
-        return self.db.query(Transaction)\
+        query = self.db.query(Transaction)\
             .filter(
                 Transaction.user_id == user_id,
                 Transaction.transaction_date >= start_date,
                 Transaction.transaction_date <= end_date
-            )\
-            .order_by(Transaction.transaction_date.desc())\
+            )
+            
+        if bank_account_id:
+            query = query.filter(Transaction.bank_account_id == bank_account_id)
+            
+        return query.order_by(Transaction.transaction_date.desc())\
             .all()
     
     def get_spending_by_category(self, user_id: str, start_date: date, end_date: date) -> List[dict]:
@@ -82,6 +96,7 @@ class TransactionRepository(BaseRepository[Transaction]):
         category_id: Optional[str] = None,
         category: Optional[str] = None,
         description: Optional[str] = None,
+        bank_account_id: Optional[str] = None,
         ai_confidence: Optional[float] = None,
         needs_review: bool = False
     ) -> Transaction:
@@ -95,6 +110,7 @@ class TransactionRepository(BaseRepository[Transaction]):
             category_id=category_id,
             category=category,
             description=description,
+            bank_account_id=bank_account_id,
             ai_confidence=ai_confidence,
             needs_review=needs_review
         )

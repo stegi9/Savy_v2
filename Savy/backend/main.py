@@ -21,6 +21,7 @@ from api.routes import (
     bill_router, 
     deep_dive_router, 
     bank_router, 
+    accounts_router,
     affiliate_controller
 )
 from api.routes import gdpr_controller
@@ -278,6 +279,7 @@ app.include_router(user_router, prefix=settings.api_v1_prefix)
 app.include_router(bill_router, prefix=settings.api_v1_prefix)
 app.include_router(deep_dive_router, prefix=settings.api_v1_prefix)
 app.include_router(bank_router, prefix=settings.api_v1_prefix)
+app.include_router(accounts_router, prefix=settings.api_v1_prefix)
 app.include_router(affiliate_controller.router, prefix=settings.api_v1_prefix)
 app.include_router(gdpr_controller.router, prefix=settings.api_v1_prefix)
 

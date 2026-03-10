@@ -60,18 +60,22 @@ class AppColors {
   // CATEGORY COLORS - Distinct & Beautiful (iOS Inspired)
   // ============================================================================
   static const List<Color> categoryColors = [
-    Color(0xFF0A84FF), // Blue
-    Color(0xFFFF9500), // Orange
-    Color(0xFF5E5CE6), // Purple
-    Color(0xFF5AC8FA), // Teal
-    Color(0xFFFF2D55), // Pink
-    Color(0xFF34C759), // Green
-    Color(0xFFFF453A), // Red
-    Color(0xFF30D158), // Mint
-    Color(0xFF5856D6), // Indigo
-    Color(0xFFFFCC00), // Yellow
-    Color(0xFF00C7BE), // Cyan
-    Color(0xFFAF52DE), // Purple Alt
+    Color(0xFF10B981), // Emerald Green
+    Color(0xFF3B82F6), // Blue
+    Color(0xFFF59E0B), // Amber
+    Color(0xFFEF4444), // Red
+    Color(0xFF8B5CF6), // Purple
+    Color(0xFFEC4899), // Pink
+    Color(0xFF06B6D4), // Cyan
+    Color(0xFFF97316), // Orange
+    Color(0xFF14B8A6), // Teal
+    Color(0xFF84CC16), // Lime
+    Color(0xFFA855F7), // Violet
+    Color(0xFFF43F5E), // Rose
+    Color(0xFF0EA5E9), // Sky Blue
+    Color(0xFF22C55E), // Green
+    Color(0xFFFBBF24), // Yellow
+    Color(0xFF6366F1), // Indigo
   ];
   
   // ============================================================================

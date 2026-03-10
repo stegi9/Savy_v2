@@ -9,6 +9,8 @@ import '../../../../core/widgets/modern_widgets.dart';
 import '../../../affiliate/presentation/widgets/smart_suggestion_card.dart';
 import '../../../affiliate/presentation/providers/affiliate_provider.dart';
 import '../../../../core/l10n/app_strings.dart';
+import '../../../accounts/data/providers/account_provider.dart';
+import '../../../accounts/presentation/widgets/account_card.dart';
 
 /// SAVY Dashboard - Ultra-Modern Design
 /// iOS/Revolut inspired with glassmorphism and fluid animations
@@ -114,7 +116,6 @@ class DashboardScreen extends ConsumerWidget {
     final profile = data['profile'];
     final settings = data['settings'];
     final bills = data['bills'] as List;
-    final reportData = data['report'];
 
     final currentBalance = _parseDouble(profile['current_balance']);
     final monthlyBudget = _parseDouble(settings['monthly_budget']);
@@ -137,17 +138,16 @@ class DashboardScreen extends ConsumerWidget {
               delegate: SliverChildListDelegate([
                 const SizedBox(height: 20),
                 
-                // Premium Balance Card
-                _ModernBalanceCard(
-                  balance: currentBalance,
+                // Accounts Carousel (Total + Individuals)
+                _AccountsCarousel(
+                  totalBalance: currentBalance,
                   budget: monthlyBudget,
-                  reportData: reportData,
                 ),
                 
                 const SizedBox(height: 24),
                 
                 // Stats Row
-                _StatsRow(reportData: reportData),
+                const _StatsRow(),
                 
                 const SizedBox(height: 24),
                 
@@ -164,7 +164,7 @@ class DashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 32),
                 
                 // Spending Chart
-                _ModernSpendingChart(reportData: reportData),
+                const _ModernSpendingChart(),
                 
                 const SizedBox(height: 32),
                 
@@ -316,22 +316,149 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
+// Accounts Carousel (Total Balance + Individual Accounts)
+// ============================================================================
+class _AccountsCarousel extends ConsumerStatefulWidget {
+  final double totalBalance;
+  final double budget;
+
+  const _AccountsCarousel({
+    required this.totalBalance,
+    required this.budget,
+  });
+
+  @override
+  ConsumerState<_AccountsCarousel> createState() => _AccountsCarouselState();
+}
+
+class _AccountsCarouselState extends ConsumerState<_AccountsCarousel> {
+  final PageController _pageController = PageController(viewportFraction: 0.93);
+  int _currentIndex = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accountsState = ref.watch(accountsProvider);
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 360, // Fixed height for cards, increased for modern balance card contents
+          child: PageView(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() => _currentIndex = index);
+              // Update global selected account filter based on carousel swipe
+              final accounts = ref.read(accountsProvider).valueOrNull ?? [];
+              if (index == 0) {
+                ref.read(selectedAccountIdProvider.notifier).state = null; // Total Wealth
+              } else if (index - 1 < accounts.length) {
+                ref.read(selectedAccountIdProvider.notifier).state = accounts[index - 1].id;
+              }
+            },
+            physics: const BouncingScrollPhysics(),
+            children: [
+              // 1. Total Wealth Card inside a slightly padded container for the viewport fraction
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: _ModernBalanceCard(
+                  balance: widget.totalBalance,
+                  budget: widget.budget,
+                ),
+              ),
+              // 2+. Individual Accounts
+              ...accountsState.maybeWhen(
+                data: (accounts) => accounts.map((account) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: AccountCard(
+                    account: account,
+                    onTap: () => context.push('/accounts'), // Optional quick action
+                  ),
+                )).toList(),
+                orElse: () => [],
+              ),
+              // 3. Add Account Prompt
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: GestureDetector(
+                  onTap: () => context.push('/accounts'),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withOpacity(0.2), width: 1, style: BorderStyle.solid),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.add, color: Theme.of(context).colorScheme.primary, size: 32),
+                        ),
+                        const SizedBox(height: 16),
+                        Text('Aggiungi Conto', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 16)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Page Indicators
+        accountsState.maybeWhen(
+          data: (accounts) => Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              accounts.length + 2, // Total + Accounts + Add Card
+              (index) => AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                height: 6,
+                width: _currentIndex == index ? 24 : 6,
+                decoration: BoxDecoration(
+                  color: _currentIndex == index 
+                      ? Theme.of(context).colorScheme.primary 
+                      : Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+          ),
+          orElse: () => const SizedBox(),
+        ),
+      ],
+    );
+  }
+}
+
 // ============================================================================
 // Modern Balance Card with Glassmorphism
 // ============================================================================
-class _ModernBalanceCard extends StatelessWidget {
+class _ModernBalanceCard extends ConsumerWidget {
   final double balance;
   final double budget;
-  final Map<String, dynamic> reportData;
 
   const _ModernBalanceCard({
     required this.balance,
     required this.budget,
-    required this.reportData,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reportAsync = ref.watch(spendingReportProvider);
+    
+    final reportData = reportAsync.valueOrNull ?? {};
     final report = reportData['data'] ?? {};
     final totalSpent = (report['total_spent'] as num?)?.toDouble() ?? 0.0;
     final percentUsed = budget > 0 ? (totalSpent / budget * 100).clamp(0, 100) : 0.0;
@@ -525,39 +652,101 @@ class _BalanceInfo extends StatelessWidget {
 // ============================================================================
 // Stats Row
 // ============================================================================
-class _StatsRow extends StatelessWidget {
-  final Map<String, dynamic> reportData;
+class _StatsRow extends ConsumerWidget {
+  const _StatsRow();
 
-  const _StatsRow({required this.reportData});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reportAsync = ref.watch(spendingReportProvider);
+    
+    return reportAsync.when(
+      data: (reportData) {
+        final report = reportData['data'] ?? {};
+        final totalSpent = (report['total_spent'] as num?)?.toDouble() ?? 0.0;
+        final totalIncome = (report['total_income'] as num?)?.toDouble() ?? 0.0;
+
+        return Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                title: 'Entrate',
+                amount: totalIncome,
+                icon: Icons.arrow_downward_rounded,
+                color: AppColors.success,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _StatCard(
+                title: 'Uscite',
+                amount: totalSpent,
+                icon: Icons.arrow_upward_rounded,
+                color: AppColors.error,
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
+      error: (_, __) => const SizedBox(height: 80),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String title;
+  final double amount;
+  final IconData icon;
+  final Color color;
+
+  const _StatCard({
+    required this.title,
+    required this.amount,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final report = reportData['data'] ?? {};
-    final totalSpent = (report['total_spent'] as num?)?.toDouble() ?? 0.0;
-    final categories = (report['categories'] as List?)?.length ?? 0;
-
-    return Row(
-      children: [
-        Expanded(
-          child: StatCard(
-            title: 'Spese totali',
-            value: '€${totalSpent.toStringAsFixed(0)}',
-            icon: Icons.trending_down_rounded,
-            color: AppColors.error,
-            subtitle: 'Questo mese',
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadowLight,
+            blurRadius: 10,
+            offset: const Offset(0, 5),
           ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: StatCard(
-            title: 'Categorie',
-            value: categories.toString(),
-            icon: Icons.category_rounded,
-            color: AppColors.accentPurple,
-            subtitle: 'Attive',
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                    ),
+              ),
+            ],
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          AnimatedCounter(
+            value: amount,
+            prefix: '€',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -684,123 +873,133 @@ class _ActionCard extends StatelessWidget {
 // ============================================================================
 // Modern Spending Chart
 // ============================================================================
-class _ModernSpendingChart extends StatelessWidget {
-  final Map<String, dynamic> reportData;
-
-  const _ModernSpendingChart({required this.reportData});
+class _ModernSpendingChart extends ConsumerWidget {
+  const _ModernSpendingChart();
 
   @override
-  Widget build(BuildContext context) {
-    final report = reportData['data'] ?? {};
-    final categories = (report['categories'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reportAsync = ref.watch(spendingReportProvider);
+    
+    return reportAsync.when(
+      data: (reportData) {
+        final report = reportData['data'] ?? {};
+        final categories = (report['categories'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
-    if (categories.isEmpty) {
-      return _EmptyChartCard();
-    }
+        if (categories.isEmpty) {
+          return _EmptyChartCard();
+        }
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadowLight,
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Flexible(
-                child: Text(
-                  AppStrings.get('expensesByCategory'),
-                  style: Theme.of(context).textTheme.titleLarge,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              TextButton(
-                onPressed: () => context.push('/analytics/deep-dive'),
-                child: const Text('Dettagli'),
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.shadowLight,
+                blurRadius: 20,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 200,
-            child: PieChart(
-              PieChartData(
-                sections: categories.map((cat) {
-                  final total = (cat['total_spent'] as num?)?.toDouble() ?? 0.0;
-                  final percentage = (cat['percentage_of_total'] as num?)?.toDouble() ?? 0.0;
-                  final colorHex = cat['color'] as String? ?? '#0A84FF';
-                  final color = _hexToColor(colorHex);
-
-                  return PieChartSectionData(
-                    value: total,
-                    title: '${percentage.toStringAsFixed(0)}%',
-                    color: color,
-                    radius: 70,
-                    titleStyle: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      letterSpacing: -0.3,
-                    ),
-                  );
-                }).toList(),
-                sectionsSpace: 3,
-                centerSpaceRadius: 50,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          ...categories.take(5).map((cat) {
-            final name = cat['category_name'] as String;
-            final total = (cat['total_spent'] as num?)?.toDouble() ?? 0.0;
-            final colorHex = cat['color'] as String? ?? '#0A84FF';
-            final color = _hexToColor(colorHex);
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                  Flexible(
                     child: Text(
-                      name,
-                      style: Theme.of(context).textTheme.bodyLarge,
+                      AppStrings.get('expensesByCategory'),
+                      style: Theme.of(context).textTheme.titleLarge,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  Text(
-                    '€${total.toStringAsFixed(2)}',
-                    style: Theme.of(context).textTheme.titleSmall,
+                  TextButton(
+                    onPressed: () => context.push('/analytics/deep-dive'),
+                    child: const Text('Dettagli'),
                   ),
                 ],
               ),
-            );
-          }),
-        ],
-      ),
+              const SizedBox(height: 24),
+              SizedBox(
+                height: 200,
+                child: PieChart(
+                  PieChartData(
+                    sections: categories.map((cat) {
+                      final total = (cat['total_spent'] as num?)?.toDouble() ?? 0.0;
+                      final percentage = (cat['percentage_of_total'] as num?)?.toDouble() ?? 0.0;
+                      final colorHex = cat['color'] as String? ?? '#0A84FF';
+                      final color = _hexToColor(colorHex);
+
+                      return PieChartSectionData(
+                        value: total,
+                        title: '${percentage.toStringAsFixed(0)}%',
+                        color: color,
+                        radius: 70,
+                        titleStyle: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: -0.3,
+                        ),
+                      );
+                    }).toList(),
+                    sectionsSpace: 3,
+                    centerSpaceRadius: 50,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              ...categories.map((cat) {
+                final name = cat['category_name'] as String;
+                final total = (cat['total_spent'] as num?)?.toDouble() ?? 0.0;
+                final colorHex = cat['color'] as String? ?? '#0A84FF';
+                final color = _hexToColor(colorHex);
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      ),
+                      Text(
+                        '€${total.toStringAsFixed(2)}',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox(height: 300, child: Center(child: CircularProgressIndicator())),
+      error: (_, __) => const SizedBox(height: 300),
     );
   }
 
   Color _hexToColor(String hex) {
+    if (hex.isEmpty) return Colors.blue;
     final hexCode = hex.replaceAll('#', '');
-    return Color(int.parse('FF$hexCode', radix: 16));
+    if (hexCode.length == 6) {
+      return Color(int.parse('FF$hexCode', radix: 16));
+    }
+    return Colors.blue;
   }
 }
 
@@ -871,7 +1070,7 @@ class _ModernBillsList extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        ...bills.take(3).map((bill) {
+        ...bills.map((bill) {
           final name = bill['name'] as String;
           final amount = (bill['amount'] is num)
               ? (bill['amount'] as num).toDouble()

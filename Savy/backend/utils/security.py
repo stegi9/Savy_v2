@@ -38,8 +38,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        # Short-lived access token (15 minutes)
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        # Access token expiration from settings
+        expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
     
     to_encode.update({"exp": expire, "type": "access"})
     

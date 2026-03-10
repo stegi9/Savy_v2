@@ -194,6 +194,7 @@ class TransactionCreate(BaseModel):
     category: str
     description: Optional[str] = None
     transaction_date: date
+    bank_account_id: Optional[str] = None
     is_recurring: bool = False
     
     @field_validator('amount')
@@ -228,6 +229,7 @@ class TransactionResponse(BaseModel):
     category: str
     description: Optional[str]
     transaction_date: date
+    bank_account_id: Optional[str]
     is_recurring: bool
     created_at: datetime
 
@@ -543,6 +545,7 @@ class SpendingReportResponse(BaseModel):
 class DeepDiveRequest(BaseModel):
     """Request for deep dive analytics."""
     period: str = Field("monthly", description="Period: 'monthly', '3months', 'yearly'")
+    bank_account_id: Optional[str] = Field(None, description="Filter by specific bank account ID")
 
 
 class CategoryTrend(BaseModel):
@@ -630,3 +633,45 @@ class BankConnectionResponse(BaseModel):
 class BankLinkResponse(BaseModel):
     link: str
     # connect_session_secret: Optional[str] 
+
+# ============================================================================
+# MANUAL BANK ACCOUNTS
+# ============================================================================
+
+class BankAccountCreate(BaseModel):
+    """Request to create a manual bank account."""
+    name: str = Field(..., min_length=1, max_length=100)
+    balance: Decimal = Field(default=0.0)
+    color: Optional[str] = Field(None, pattern="^#[0-9A-Fa-f]{6}$")
+    icon: Optional[str] = None
+    currency: str = Field(default="EUR", max_length=3)
+    nature: str = Field(default="account", max_length=50)
+
+class BankAccountUpdate(BaseModel):
+    """Request to update a manual bank account."""
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    balance: Optional[Decimal] = None
+    color: Optional[str] = Field(None, pattern="^#[0-9A-Fa-f]{6}$")
+    icon: Optional[str] = None
+    currency: Optional[str] = Field(None, max_length=3)
+    nature: Optional[str] = Field(None, max_length=50)
+
+class BankAccountResponse(BaseModel):
+    """Response with bank account data."""
+    id: str
+    user_id: str
+    connection_id: Optional[str]
+    is_manual: bool
+    provider_account_id: Optional[str]
+    name: Optional[str]
+    color: Optional[str]
+    icon: Optional[str]
+    currency: str
+    balance: Optional[Decimal]
+    nature: Optional[str]
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+ 

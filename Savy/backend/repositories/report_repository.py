@@ -4,7 +4,7 @@ Repository for spending reports.
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from datetime import datetime, date as date_type
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import structlog
 
 from models.transaction import Transaction
@@ -23,7 +23,8 @@ class ReportRepository:
         self,
         user_id: str,
         start_date: datetime,
-        end_date: datetime
+        end_date: datetime,
+        bank_account_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Get spending grouped by category for a date range.
@@ -44,7 +45,7 @@ class ReportRepository:
             end = end_date.date() if isinstance(end_date, datetime) else end_date
             
             # Query transactions grouped by category (LEFT JOIN to include uncategorized)
-            results = (
+            base_query = (
                 self.db.query(
                     Transaction.category_id,
                     UserCategory.name.label('category_name'),
@@ -55,16 +56,25 @@ class ReportRepository:
                     func.count(Transaction.id).label('transaction_count')
                 )
                 .outerjoin(UserCategory, Transaction.category_id == UserCategory.id)
-                .filter(
-                    Transaction.user_id == user_id,
-                    Transaction.transaction_date >= start,
-                    Transaction.transaction_date <= end,
-                    # Only include EXPENSES, not income
-                    or_(
-                        Transaction.transaction_type == 'expense',
-                        Transaction.transaction_type.is_(None)  # Legacy transactions
-                    )
+            )
+            
+            filters = [
+                Transaction.user_id == user_id,
+                Transaction.transaction_date >= start,
+                Transaction.transaction_date <= end,
+                # Only include EXPENSES, not income
+                or_(
+                    Transaction.transaction_type == 'expense',
+                    Transaction.transaction_type.is_(None)  # Legacy transactions
                 )
+            ]
+            
+            if bank_account_id:
+                filters.append(Transaction.bank_account_id == bank_account_id)
+                
+            results = (
+                base_query
+                .filter(*filters)
                 .group_by(
                     Transaction.category_id,
                     UserCategory.name,
@@ -106,7 +116,8 @@ class ReportRepository:
         self,
         user_id: str,
         start_date: datetime,
-        end_date: datetime
+        end_date: datetime,
+        bank_account_id: Optional[str] = None
     ) -> float:
         """
         Get total spending for a date range.
@@ -125,18 +136,22 @@ class ReportRepository:
             start = start_date.date() if isinstance(start_date, datetime) else start_date
             end = end_date.date() if isinstance(end_date, datetime) else end_date
             
+            filters = [
+                Transaction.user_id == user_id,
+                Transaction.transaction_date >= start,
+                Transaction.transaction_date <= end,
+                # Only include EXPENSES
+                or_(
+                    Transaction.transaction_type == 'expense',
+                    Transaction.transaction_type.is_(None)  # Legacy transactions
+                )
+            ]
+            if bank_account_id:
+                filters.append(Transaction.bank_account_id == bank_account_id)
+                
             result = (
                 self.db.query(func.sum(Transaction.amount))
-                .filter(
-                    Transaction.user_id == user_id,
-                    Transaction.transaction_date >= start,
-                    Transaction.transaction_date <= end,
-                    # Only include EXPENSES
-                    or_(
-                        Transaction.transaction_type == 'expense',
-                        Transaction.transaction_type.is_(None)  # Legacy transactions
-                    )
-                )
+                .filter(*filters)
                 .scalar()
             )
             
@@ -160,7 +175,8 @@ class ReportRepository:
         self,
         user_id: str,
         start_date: datetime,
-        end_date: datetime
+        end_date: datetime,
+        bank_account_id: Optional[str] = None
     ) -> float:
         """
         Get total income for a date range.
@@ -178,14 +194,18 @@ class ReportRepository:
             start = start_date.date() if isinstance(start_date, datetime) else start_date
             end = end_date.date() if isinstance(end_date, datetime) else end_date
             
+            filters = [
+                Transaction.user_id == user_id,
+                Transaction.transaction_date >= start,
+                Transaction.transaction_date <= end,
+                Transaction.transaction_type == 'income'
+            ]
+            if bank_account_id:
+                filters.append(Transaction.bank_account_id == bank_account_id)
+                
             result = (
                 self.db.query(func.sum(Transaction.amount))
-                .filter(
-                    Transaction.user_id == user_id,
-                    Transaction.transaction_date >= start,
-                    Transaction.transaction_date <= end,
-                    Transaction.transaction_type == 'income'
-                )
+                .filter(*filters)
                 .scalar()
             )
             
@@ -211,7 +231,8 @@ class ReportRepository:
         category_id: str,
         start_date: datetime,
         end_date: datetime,
-        granularity: str = "daily"
+        granularity: str = "daily",
+        bank_account_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Get spending trend for a category over time.
@@ -230,19 +251,23 @@ class ReportRepository:
             start = start_date.date() if isinstance(start_date, datetime) else start_date
             end = end_date.date() if isinstance(end_date, datetime) else end_date
             
+            filters = [
+                Transaction.user_id == user_id,
+                Transaction.category_id == category_id,
+                Transaction.transaction_date >= start,
+                Transaction.transaction_date <= end,
+                Transaction.transaction_type == 'expense'
+            ]
+            if bank_account_id:
+                filters.append(Transaction.bank_account_id == bank_account_id)
+
             # Query transactions grouped by date
             results = (
                 self.db.query(
                     Transaction.transaction_date,
                     func.sum(Transaction.amount).label('amount')
                 )
-                .filter(
-                    Transaction.user_id == user_id,
-                    Transaction.category_id == category_id,
-                    Transaction.transaction_date >= start,
-                    Transaction.transaction_date <= end,
-                    Transaction.transaction_type == 'expense'
-                )
+                .filter(*filters)
                 .group_by(Transaction.transaction_date)
                 .order_by(Transaction.transaction_date)
                 .all()
@@ -264,7 +289,8 @@ class ReportRepository:
         self,
         user_id: str,
         start_date: datetime,
-        end_date: datetime
+        end_date: datetime,
+        bank_account_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Get cumulative spending by day for the period.
@@ -281,18 +307,22 @@ class ReportRepository:
             start = start_date.date() if isinstance(start_date, datetime) else start_date
             end = end_date.date() if isinstance(end_date, datetime) else end_date
             
+            filters = [
+                Transaction.user_id == user_id,
+                Transaction.transaction_date >= start,
+                Transaction.transaction_date <= end,
+                Transaction.transaction_type == 'expense'
+            ]
+            if bank_account_id:
+                filters.append(Transaction.bank_account_id == bank_account_id)
+
             # Query transactions grouped by date
             results = (
                 self.db.query(
                     Transaction.transaction_date,
                     func.sum(Transaction.amount).label('amount')
                 )
-                .filter(
-                    Transaction.user_id == user_id,
-                    Transaction.transaction_date >= start,
-                    Transaction.transaction_date <= end,
-                    Transaction.transaction_type == 'expense'
-                )
+                .filter(*filters)
                 .group_by(Transaction.transaction_date)
                 .order_by(Transaction.transaction_date)
                 .all()

@@ -15,6 +15,9 @@ Future<bool> _isAuthenticated() async {
   return token != null && token.isNotEmpty;
 }
 
+// Global Filter for Selected Account
+final selectedAccountIdProvider = StateProvider<String?>((ref) => null);
+
 // Dashboard Data Provider
 final dashboardDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   // Check authentication first
@@ -26,23 +29,21 @@ final dashboardDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   final profile = await apiClient.getCurrentUser();
   final settings = await apiClient.getUserSettings();
   final bills = await apiClient.getBills(activeOnly: true);
-  final reportData = await apiClient.getSpendingReport(period: 'monthly');
   
   return {
     'profile': profile,
     'settings': settings,
     'bills': bills,
-    'report': reportData,
   };
 });
 
-// Transactions Provider
 final transactionsProvider = FutureProvider<List<dynamic>>((ref) async {
   if (!await _isAuthenticated()) {
     return [];
   }
   final apiClient = ref.watch(apiClientProvider);
-  return await apiClient.getTransactions();
+  final accountId = ref.watch(selectedAccountIdProvider);
+  return await apiClient.getTransactions(bankAccountId: accountId);
 });
 
 // Categories Provider
@@ -72,22 +73,22 @@ final userSettingsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   return await apiClient.getUserSettings();
 });
 
-// Spending Report Provider
 final spendingReportProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   if (!await _isAuthenticated()) {
     return {};
   }
   final apiClient = ref.watch(apiClientProvider);
-  return await apiClient.getSpendingReport(period: 'monthly');
+  final accountId = ref.watch(selectedAccountIdProvider);
+  return await apiClient.getSpendingReport(period: 'monthly', bankAccountId: accountId);
 });
 
-// Deep Dive Analytics Provider (with period parameter)
 final deepDiveAnalyticsProvider = FutureProvider.family<Map<String, dynamic>, String>((ref, period) async {
   if (!await _isAuthenticated()) {
     return {};
   }
   final apiClient = ref.watch(apiClientProvider);
-  return await apiClient.getDeepDiveAnalytics(period: period);
+  final accountId = ref.watch(selectedAccountIdProvider);
+  return await apiClient.getDeepDiveAnalytics(period: period, bankAccountId: accountId);
 });
 
 

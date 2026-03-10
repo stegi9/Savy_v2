@@ -24,7 +24,7 @@ def get_llm_client() -> ChatGoogleGenerativeAI:
         ChatGoogleGenerativeAI instance
     """
     return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-exp",  # O usa "gemini-1.5-pro" per più potenza
+        model="gemini-2.5-flash",  # Modello disponibile con questa API key
         temperature=0.7,
         google_api_key=settings.gemini_api_key,
         convert_system_message_to_human=True  # Gemini non supporta system messages nativamente

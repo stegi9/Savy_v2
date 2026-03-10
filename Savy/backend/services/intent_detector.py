@@ -16,7 +16,7 @@ logger = structlog.get_logger()
 def get_intent_llm() -> ChatGoogleGenerativeAI:
     """Fast LLM for intent detection."""
     return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-exp",
+        model="gemini-2.5-flash",
         temperature=0.1,  # Low temp for consistent classification
         google_api_key=settings.gemini_api_key,
         convert_system_message_to_human=True

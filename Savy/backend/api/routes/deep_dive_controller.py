@@ -48,7 +48,8 @@ async def get_deep_dive_analytics(
         # Generate analytics
         analytics = service.generate_deep_dive(
             user_id=current_user.id,
-            period=request.period
+            period=request.period,
+            bank_account_id=request.bank_account_id
         )
         
         logger.info(

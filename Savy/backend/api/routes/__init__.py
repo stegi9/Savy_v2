@@ -11,6 +11,7 @@ from .user_controller import router as user_router
 from .bill_controller import router as bill_router
 from .deep_dive_controller import router as deep_dive_router
 from .bank import router as bank_router
+from .accounts import router as accounts_router
 
 __all__ = [
     "auth_router",
@@ -22,6 +23,7 @@ __all__ = [
     "user_router",
     "bill_router",
     "deep_dive_router",
-    "bank_router"
+    "bank_router",
+    "accounts_router"
 ]
 

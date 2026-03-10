@@ -68,6 +68,12 @@ async def create_category(
         
         return new_category
         
+    except ValueError as e:
+        logger.error("create_category_failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except Exception as e:
         logger.error("create_category_failed", error=str(e))
         raise HTTPException(
@@ -107,6 +113,12 @@ async def update_category(
         
         return updated_category
         
+    except ValueError as e:
+        logger.error("update_category_failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except HTTPException:
         raise
     except Exception as e:

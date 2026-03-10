@@ -30,6 +30,7 @@ class TransactionCreateRequest(BaseModel):
     transaction_type: str = Field("expense", description="Transaction type: 'expense' or 'income'")
     description: Optional[str] = Field(None, description="Transaction description")
     date: DateType = Field(..., description="Transaction date (YYYY-MM-DD)")
+    bank_account_id: Optional[str] = Field(None, description="Bank account ID")
     auto_categorize: bool = Field(True, description="Auto-categorize with AI")
 
 
@@ -43,6 +44,7 @@ class TransactionResponse(BaseModel):
     category_name: Optional[str]
     description: Optional[str]
     date: str
+    bank_account_id: Optional[str]
     ai_confidence: Optional[float]
     needs_review: bool
     created_at: str
@@ -195,18 +197,25 @@ async def create_transaction(
             category=category_name,
             description=request.description,
             date=request.date,
+            bank_account_id=request.bank_account_id,
             ai_confidence=ai_confidence,
             needs_review=needs_review
         )
         
-        # Update user balance based on transaction type
+        # Update user balance and bank account balance
         user_repo = UserRepository(db)
         current_balance = float(current_user.current_balance or 0)
-        if tx_type == "income":
-            new_balance = current_balance + request.amount  # Income adds to balance
-        else:
-            new_balance = current_balance - request.amount  # Expense subtracts
+        amount_delta = request.amount if tx_type == "income" else -request.amount
+        new_balance = current_balance + amount_delta
         user_repo.update_balance(current_user.id, new_balance)
+        
+        if request.bank_account_id:
+            from models.bank_account import BankAccount
+            bank_account = db.query(BankAccount).filter_by(id=request.bank_account_id).first()
+            if bank_account:
+                current_acc_balance = float(bank_account.balance or 0)
+                bank_account.balance = current_acc_balance + amount_delta
+                db.commit()
         
         logger.info(
             "transaction_created",
@@ -228,6 +237,7 @@ async def create_transaction(
                 "category_name": transaction.category or category_name,
                 "description": transaction.description,
                 "date": transaction.transaction_date.isoformat(),
+                "bank_account_id": transaction.bank_account_id,
                 "ai_confidence": transaction.ai_confidence,
                 "needs_review": transaction.needs_review,
                 "created_at": transaction.created_at.isoformat()
@@ -253,6 +263,7 @@ async def get_user_transactions(
     needs_review: Optional[bool] = None,
     start_date: Optional[DateType] = None,
     end_date: Optional[DateType] = None,
+    bank_account_id: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -269,7 +280,8 @@ async def get_user_transactions(
             "get_transactions_request",
             user_id=current_user.id,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            bank_account_id=bank_account_id
         )
         
         transaction_repo = TransactionRepository(db)
@@ -278,7 +290,8 @@ async def get_user_transactions(
             limit=limit,
             needs_review=needs_review,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            bank_account_id=bank_account_id
         )
         
         result = []
@@ -294,6 +307,7 @@ async def get_user_transactions(
                 "category_name": t.category,  # Alias for Flutter compatibility
                 "description": t.description,
                 "date": t.transaction_date.isoformat(),
+                "bank_account_id": t.bank_account_id,
                 "ai_confidence": t.ai_confidence,
                 "needs_review": t.needs_review,
                 "created_at": t.created_at.isoformat()
@@ -447,12 +461,22 @@ async def delete_transaction(
         
         if transaction.transaction_type == 'income':
             # Deleting income: SUBTRACT from balance (remove the income)
-            new_balance = current_balance - float(transaction.amount)
+            amount_delta = -float(transaction.amount)
         else:
             # Deleting expense: ADD back to balance (restore the spent money)
-            new_balance = current_balance + float(transaction.amount)
-        
+            amount_delta = float(transaction.amount)
+            
+        new_balance = current_balance + amount_delta
         user_repo.update_balance(current_user.id, new_balance)
+        
+        # Restore bank account balance
+        if transaction.bank_account_id:
+            from models.bank_account import BankAccount
+            bank_account = db.query(BankAccount).filter_by(id=transaction.bank_account_id).first()
+            if bank_account:
+                current_acc_balance = float(bank_account.balance or 0)
+                bank_account.balance = current_acc_balance + amount_delta
+                db.commit()
         
         # Delete transaction
         transaction_repo.delete(transaction_id)
