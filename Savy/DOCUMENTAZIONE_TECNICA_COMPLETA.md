@@ -363,6 +363,25 @@ CREATE TABLE users (
 );
 ```
 
+#### **bank_accounts** (Multi-Conto)
+```sql
+CREATE TABLE bank_accounts (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    provider_id VARCHAR(50),
+    balance DECIMAL(12,2) DEFAULT 0.00,
+    currency VARCHAR(3) DEFAULT 'EUR',
+    is_manual BOOLEAN DEFAULT TRUE,
+    color VARCHAR(7) DEFAULT '#1E88E5',
+    icon VARCHAR(50) DEFAULT 'account_balance_wallet',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id)
+);
+```
+
 #### **categories**
 ```sql
 CREATE TABLE categories (
@@ -387,6 +406,7 @@ CREATE TABLE transactions (
     id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL,
     category_id VARCHAR(36),
+    bank_account_id VARCHAR(36),
     amount DECIMAL(12,2) NOT NULL,
     description TEXT,
     merchant_name VARCHAR(200),
@@ -398,8 +418,10 @@ CREATE TABLE transactions (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
+    FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id) ON DELETE SET NULL,
     INDEX idx_user_date (user_id, transaction_date),
-    INDEX idx_category (category_id)
+    INDEX idx_category (category_id),
+    INDEX idx_bank_account (bank_account_id)
 );
 ```
 
