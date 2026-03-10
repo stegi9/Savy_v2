@@ -35,6 +35,8 @@ Savy è un'applicazione di personal finance che utilizza l'intelligenza artifici
 
 ### 🎨 Frontend (Flutter)
 - ✅ **Design moderno iOS/Revolut-style** con glassmorphism
+- ✅ **Supporto Multi-Conto** con selettori dinamici (ChoiceChips) e carosello
+- ✅ **Isolamento Dati Analitico** per ogni conto o visione globale
 - ✅ **Onboarding interattivo** per nuovi utenti
 - ✅ **Dark mode** automatico
 - ✅ **Offline mode** con cache locale (Hive)
@@ -46,8 +48,9 @@ Savy è un'applicazione di personal finance che utilizza l'intelligenza artifici
 - ✅ **Animazioni fluide** e micro-interactions
 
 ### 🔧 Backend (FastAPI + LangGraph)
+- ✅ **Architettura Multi-Conto Reale** (separazione ledger e bank_account_id)
 - ✅ **AI Coach con LangGraph** (6 nodi di reasoning)
-- ✅ **Google Gemini 2.0 Flash** per analisi finanziaria
+- ✅ **Google Gemini 2.0 Flash** per analisi finanziaria e insight per conto
 - ✅ **JWT Authentication** con refresh tokens
 - ✅ **Email verification** e password reset
 - ✅ **Background jobs** con Celery
@@ -56,7 +59,7 @@ Savy è un'applicazione di personal finance che utilizza l'intelligenza artifici
 - ✅ **Error monitoring** con Sentry
 - ✅ **Integration tests** completi
 - ✅ **Docker Compose** per deploy facile
-
+- ✅ **Filtri Multi-Conto** sulle API Analytics e Transazioni
 ### 📊 Database & Infrastructure
 - ✅ **MySQL 8.0** ottimizzato con indici
 - ✅ **Redis 7** per cache e Celery broker
@@ -153,9 +156,7 @@ Per guida dettagliata: [QUICK_START.md](QUICK_START.md)
 
 | Document | Description |
 |----------|-------------|
-| [QUICK_START.md](QUICK_START.md) | Guida completa setup e troubleshooting |
-| [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) | Riepilogo di tutte le implementazioni |
-| [DB_MIGRATION_GUIDE.md](DB_MIGRATION_GUIDE.md) | Guida migrazione database |
+| [DOCUMENTAZIONE_TECNICA_COMPLETA.md](DOCUMENTAZIONE_TECNICA_COMPLETA.md) | Guida tecnica completa del sistema e dei requisiti |
 | [API Docs](http://localhost:8000/docs) | Swagger UI (dopo aver avviato backend) |
 
 ---
