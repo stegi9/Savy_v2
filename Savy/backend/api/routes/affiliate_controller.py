@@ -172,14 +172,38 @@ async def redirect_offer(
     # We append a generic `subId` param or trust the mocked provider logic if accessible.
     
     # For Phase 1 Mocking:
+    from urllib.parse import quote
+    safe_token = quote(token)
     if "amazon" in final_url:
-         final_url = f"{final_url}&ascsubtag={token}"
+         final_url = f"{final_url}&ascsubtag={safe_token}"
     elif "?" in final_url:
-         final_url = f"{final_url}&savy_click={token}"
+         final_url = f"{final_url}&savy_click={safe_token}"
     else:
-         final_url = f"{final_url}?savy_click={token}"
+         final_url = f"{final_url}?savy_click={safe_token}"
 
     from fastapi.responses import RedirectResponse
+    from urllib.parse import urlparse
+
+    # Sanitizzazione Anti-Open Redirect (Snyk Audit)
+    parsed_url = urlparse(final_url)
+    if parsed_url.scheme not in ["http", "https"]:
+        raise HTTPException(status_code=400, detail="Protocollo non sicuro")
+        
+    domain = parsed_url.hostname
+    allowed_domains = ["amazon.it", "amazon.com", "booking.com", "skyscanner.net", "skyscanner.it", "airbnb.com", "expedia.com", "facile.it", "segugio.it"]
+    
+    is_safe = False
+    if domain:
+        for allowed in allowed_domains:
+            if domain == allowed or domain.endswith("." + allowed):
+                is_safe = True
+                break
+                
+    if not is_safe:
+        logger.warning("open_redirect_blocked", url=final_url)
+        raise HTTPException(status_code=403, detail="Destinazione non autorizzata")
+
+    # deepcode ignore OpenRedirect: URL is validated against a strict allowed_domains whitelist above
     return RedirectResponse(url=final_url, status_code=302)
 
 
