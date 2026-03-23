@@ -334,6 +334,7 @@ class _AccountsCarousel extends ConsumerStatefulWidget {
 class _AccountsCarouselState extends ConsumerState<_AccountsCarousel> {
   final PageController _pageController = PageController(viewportFraction: 0.93);
   int _currentIndex = 0;
+  bool _isInit = false;
 
   @override
   void dispose() {
@@ -344,6 +345,40 @@ class _AccountsCarouselState extends ConsumerState<_AccountsCarousel> {
   @override
   Widget build(BuildContext context) {
     final accountsState = ref.watch(accountsProvider);
+
+    ref.listen<String?>(selectedAccountIdProvider, (previous, next) {
+      final accounts = ref.read(accountsProvider).valueOrNull ?? [];
+      int targetIndex = 0;
+      if (next != null) {
+        final idx = accounts.indexWhere((a) => a.id == next);
+        if (idx != -1) targetIndex = idx + 1;
+      }
+      if (_currentIndex != targetIndex && _pageController.hasClients) {
+        setState(() {
+          _currentIndex = targetIndex;
+        });
+        _pageController.animateToPage(targetIndex, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      }
+    });
+
+    if (!_isInit) {
+      _isInit = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final selectedId = ref.read(selectedAccountIdProvider);
+        if (selectedId != null) {
+          final accounts = ref.read(accountsProvider).valueOrNull ?? [];
+          final idx = accounts.indexWhere((a) => a.id == selectedId);
+          if (idx != -1) {
+            setState(() {
+              _currentIndex = idx + 1;
+            });
+            if (_pageController.hasClients) {
+              _pageController.jumpToPage(_currentIndex);
+            }
+          }
+        }
+      });
+    }
 
     return Column(
       children: [

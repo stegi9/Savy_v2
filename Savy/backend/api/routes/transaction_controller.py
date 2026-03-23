@@ -1,7 +1,8 @@
 """
 Controller (API Router) for transactions.
 """
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, UploadFile, File, Form
+import traceback
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import Optional, List
@@ -14,6 +15,8 @@ from repositories.user_repository import UserRepository
 from repositories.category_repository import CategoryRepository
 from repositories.merchant_rule_repository import MerchantRuleRepository
 from services.llm_service import categorize_with_ai
+from services.statement_parser_service import StatementParserService
+from config import settings
 from schemas import StandardResponse
 from api.dependencies.auth import get_current_user
 from models.user import User
@@ -505,5 +508,151 @@ async def delete_transaction(
             status_code=500,
             detail=f"Errore nell'eliminazione della transazione: {str(e)}"
         )
+
+
+from pydantic import BaseModel
+from typing import List
+
+class BulkDeleteRequest(BaseModel):
+    transaction_ids: List[str]
+
+@router.post("/bulk-delete", response_model=StandardResponse)
+async def bulk_delete_transactions(
+    request: BulkDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        transaction_repo = TransactionRepository(db)
+        user_repo = UserRepository(db)
+        
+        deleted = 0
+        total_user_delta = 0.0
+        bank_account_deltas = {}
+        
+        from models.bank_account import BankAccount
+        
+        for tx_id in request.transaction_ids:
+            transaction = transaction_repo.get_by_id(tx_id)
+            if not transaction or transaction.user_id != current_user.id:
+                continue
+                
+            amount_delta = -float(transaction.amount) if transaction.transaction_type == 'income' else float(transaction.amount)
+            total_user_delta += amount_delta
+            
+            if transaction.bank_account_id:
+                bank_account_deltas[transaction.bank_account_id] = bank_account_deltas.get(transaction.bank_account_id, 0.0) + amount_delta
+                
+            transaction_repo.delete(tx_id)
+            deleted += 1
+            
+        if total_user_delta != 0:
+            current_balance = float(current_user.current_balance or 0)
+            user_repo.update_balance(current_user.id, current_balance + total_user_delta)
+            
+        for bank_id, delta in bank_account_deltas.items():
+            if delta != 0:
+                bank_account = db.query(BankAccount).filter_by(id=bank_id).first()
+                if bank_account:
+                    bank_account.balance = float(bank_account.balance or 0) + delta
+                    db.commit()
+                    
+        return {"success": True, "message": f"{deleted} transazioni eliminate."}
+    except Exception as e:
+        logger.error("bulk_delete_failed", error=str(e))
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/upload", response_model=StandardResponse)
+async def upload_statement(
+    bank_account_id: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Upload an Excel or PDF bank statement.
+    The AI extracts transactions, categorizes them, and performs a bulk insert.
+    """
+    try:
+        logger.info("upload_statement_request", user_id=current_user.id, filename=file.filename)
+        
+        parser_service = StatementParserService(api_key=settings.gemini_api_key)
+        raw_text = await parser_service.extract_text_from_file(file)
+        
+        category_repo = CategoryRepository(db)
+        user_categories = category_repo.get_user_categories(current_user.id)
+        cat_list = [{"id": c.id, "name": c.name} for c in user_categories]
+        
+        transactions_data = parser_service.parse_transactions(raw_text, cat_list)
+        
+        transaction_repo = TransactionRepository(db)
+        user_repo = UserRepository(db)
+        inserted_count = 0
+        total_amount_delta = 0.0
+        
+        for tx_data in transactions_data:
+            if tx_data.get("amount") is None:
+                continue
+                
+            amount = float(tx_data.get("amount"))
+            tx_type = "expense" if amount < 0 else "income"
+            abs_amount = abs(amount)
+            
+            cat_id = tx_data.get("category_id")
+            valid_cat = next((c for c in user_categories if c.id == cat_id), None) if cat_id else None
+            
+            # Auto-assign needs review if confidence is low
+            conf = tx_data.get("ai_confidence", 0.0)
+            nr = tx_data.get("needs_review", conf < 0.7)
+            
+            if not valid_cat:
+                cat_id = None
+                nr = True
+                
+            from datetime import datetime
+            
+            tx_date = tx_data.get("date")
+            if not tx_date:
+                tx_date = datetime.now().strftime("%Y-%m-%d")
+                nr = True
+                
+            transaction_repo.create_transaction(
+                user_id=current_user.id,
+                merchant=tx_data.get("description", "Sconosciuto"),
+                amount=abs_amount,
+                transaction_type=tx_type,
+                category_id=cat_id,
+                category=valid_cat.name if valid_cat else None,
+                description=tx_data.get("description", "Sconosciuto"),
+                date=tx_date,
+                bank_account_id=bank_account_id if bank_account_id and bank_account_id != "null" else None,
+                ai_confidence=conf,
+                needs_review=nr
+            )
+            inserted_count += 1
+            total_amount_delta += amount
+            
+        # Update user and bank balances comprehensively
+        current_balance = float(current_user.current_balance or 0)
+        user_repo.update_balance(current_user.id, current_balance + total_amount_delta)
+        
+        if bank_account_id and bank_account_id != "null":
+            from models.bank_account import BankAccount
+            bank_account = db.query(BankAccount).filter_by(id=bank_account_id).first()
+            if bank_account:
+                current_acc_balance = float(bank_account.balance or 0)
+                bank_account.balance = current_acc_balance + total_amount_delta
+                db.commit()
+                
+        return {
+            "success": True,
+            "message": f"Estratto conto analizzato! {inserted_count} transazioni inserite.",
+            "data": {"inserted": inserted_count}
+        }
+    except Exception as e:
+        logger.error("upload_statement_failed", error=str(e), traceback=traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to process statement: {str(e)}")
 
 

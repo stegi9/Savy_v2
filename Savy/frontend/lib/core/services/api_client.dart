@@ -240,8 +240,33 @@ class ApiClient {
     return response.data;
   }
 
+  Future<Map<String, dynamic>> uploadStatement(
+      String bankAccountId, List<int> fileBytes, String fileName) async {
+    final formData = FormData.fromMap({
+      'bank_account_id': bankAccountId,
+      'file': MultipartFile.fromBytes(fileBytes, filename: fileName),
+    });
+
+    final response = await _dio.post(
+      '/transactions/upload',
+      data: formData,
+      options: Options(
+        receiveTimeout: const Duration(minutes: 5),
+        sendTimeout: const Duration(minutes: 5),
+      ),
+    );
+    return response.data;
+  }
+
   Future<void> deleteTransaction(String transactionId) async {
     await _dio.delete('/transactions/$transactionId');
+  }
+
+  Future<Map<String, dynamic>> bulkDeleteTransactions(List<String> transactionIds) async {
+    final response = await _dio.post('/transactions/bulk-delete', data: {
+      'transaction_ids': transactionIds,
+    });
+    return response.data;
   }
 
   Future<Map<String, dynamic>> updateTransactionCategory(

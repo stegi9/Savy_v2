@@ -68,6 +68,7 @@ dependencies:
   # Utilities
   logger: ^2.0.2
   equatable: ^2.0.5
+  file_picker: ^8.1.2
   
   # Splash Screen
   flutter_native_splash: ^2.3.10

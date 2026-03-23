@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/app_providers.dart';
@@ -17,6 +18,7 @@ class TransactionsScreen extends ConsumerStatefulWidget {
 
 class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   String _filter = 'all';
+  Set<String> _selectedTransactionIds = {};
 
   @override
   Widget build(BuildContext context) {
@@ -26,22 +28,36 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(AppStrings.get('actionTransaction')),
+        title: Text(_selectedTransactionIds.isEmpty 
+            ? AppStrings.get('actionTransaction') 
+            : '${_selectedTransactionIds.length} selezionate'),
+        leading: _selectedTransactionIds.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(() => _selectedTransactionIds.clear()),
+              )
+            : null,
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: theme.colorScheme.onPrimary,
         actions: [
-          PopupMenuButton<String>(
-            initialValue: _filter,
-            icon: Icon(Icons.filter_list, color: theme.colorScheme.onPrimary),
-            onSelected: (value) => setState(() => _filter = value),
-            itemBuilder: (context) => [
-              PopupMenuItem(value: 'all', child: Text(AppStrings.get('filterAll'))),
-              PopupMenuItem(value: 'review', child: Text(AppStrings.get('filterReview'))),
-              PopupMenuItem(value: 'income', child: Text(AppStrings.get('filterIncome'))),
-              PopupMenuItem(value: 'expense', child: Text(AppStrings.get('filterExpense'))),
-            ],
-            color: theme.cardColor,
-          ),
+          if (_selectedTransactionIds.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: _bulkDeleteSelected,
+            )
+          else
+            PopupMenuButton<String>(
+              initialValue: _filter,
+              icon: Icon(Icons.filter_list, color: theme.colorScheme.onPrimary),
+              onSelected: (value) => setState(() => _filter = value),
+              itemBuilder: (context) => [
+                PopupMenuItem(value: 'all', child: Text(AppStrings.get('filterAll'))),
+                PopupMenuItem(value: 'review', child: Text(AppStrings.get('filterReview'))),
+                PopupMenuItem(value: 'income', child: Text(AppStrings.get('filterIncome'))),
+                PopupMenuItem(value: 'expense', child: Text(AppStrings.get('filterExpense'))),
+              ],
+              color: theme.cardColor,
+            ),
         ],
       ),
       body: Column(
@@ -73,9 +89,23 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final transaction = filtered[index];
+                      final isSelected = _selectedTransactionIds.contains(transaction.id);
                       return _TransactionCard(
                         key: ValueKey('card_${transaction.id}'),
                         transaction: transaction,
+                        isSelected: isSelected,
+                        isSelectionMode: _selectedTransactionIds.isNotEmpty,
+                        onSelect: (selected) {
+                           setState(() {
+                              if (selected == true) _selectedTransactionIds.add(transaction.id);
+                              else _selectedTransactionIds.remove(transaction.id);
+                           });
+                        },
+                        onLongPress: () {
+                           setState(() {
+                              _selectedTransactionIds.add(transaction.id);
+                           });
+                        },
                         onDelete: () async {
                           return await _deleteTransaction(transaction.id);
                         },
@@ -93,11 +123,26 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddTransactionDialog,
-        backgroundColor: theme.colorScheme.primary,
-        icon: Icon(Icons.add, color: theme.colorScheme.onPrimary),
-        label: Text(AppStrings.get('newButton'), style: TextStyle(color: theme.colorScheme.onPrimary)),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'upload_fab',
+            onPressed: _showUploadDialog,
+            backgroundColor: theme.colorScheme.primary,
+            tooltip: 'Carica PDF/Excel per classificazione intelligente',
+            child: Icon(Icons.upload_file, color: theme.colorScheme.onPrimary),
+          ),
+          const SizedBox(height: 16),
+          FloatingActionButton.extended(
+            heroTag: 'add_fab',
+            onPressed: _showAddTransactionDialog,
+            backgroundColor: theme.colorScheme.primary,
+            icon: Icon(Icons.add, color: theme.colorScheme.onPrimary),
+            label: Text(AppStrings.get('newButton'), style: TextStyle(color: theme.colorScheme.onPrimary)),
+          ),
+        ],
       ),
     );
   }
@@ -390,11 +435,163 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
     }
   }
 
+  Future<void> _bulkDeleteSelected() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Elimina Transazioni'),
+        content: Text('Vuoi eliminare ${_selectedTransactionIds.length} transazioni? L\'azione è irreversibile.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error, foregroundColor: Theme.of(context).colorScheme.onError),
+            onPressed: () => Navigator.pop(context, true), 
+            child: const Text('Elimina')
+          ),
+        ],
+      )
+    );
+    if (confirmed != true) return;
+
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      await apiClient.bulkDeleteTransactions(_selectedTransactionIds.toList());
+      setState(() => _selectedTransactionIds.clear());
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(dashboardDataProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transazioni eliminate con successo'), backgroundColor: AppColors.success));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Errore: $e'), backgroundColor: Theme.of(context).colorScheme.error));
+      }
+    }
+  }
+
+  Future<void> _processStatementUpload(String accountId, List<int> fileBytes, String fileName) async {
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: theme.cardColor,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text('L\'AI sta leggendo il documento...', style: TextStyle(color: theme.colorScheme.onSurface)),
+            const SizedBox(height: 8),
+            Text('Potrebbe richiedere fino a un minuto.', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withOpacity(0.6))),
+          ]
+        )
+      )
+    );
+    
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      await apiClient.uploadStatement(accountId, fileBytes, fileName);
+      
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ref.invalidate(transactionsProvider);
+        ref.invalidate(dashboardDataProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Estratto conto elaborato con successo!'), backgroundColor: AppColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore: ${e.toString()}'), backgroundColor: theme.colorScheme.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _showUploadDialog() async {
+    final theme = Theme.of(context);
+    final accountsState = ref.read(accountsProvider);
+    String? localSelectedAccount = ref.read(selectedAccountIdProvider);
+
+    if (localSelectedAccount == null && accountsState is AsyncData && accountsState.value!.isNotEmpty) {
+      localSelectedAccount = accountsState.value!.first.id;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: theme.cardColor,
+          title: Row(
+            children: [
+              Icon(Icons.auto_awesome, color: theme.colorScheme.primary),
+              const SizedBox(width: 12),
+              const Expanded(child: Text('Importa Estratto Conto', style: TextStyle(fontSize: 18))),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('L\'intelligenza artificiale leggerà il tuo PDF o Excel e categorizzerà in automatico tutte le transazioni.', style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurface.withOpacity(0.8))),
+              const SizedBox(height: 16),
+              if (accountsState is AsyncData && accountsState.value!.isNotEmpty)
+                DropdownButtonFormField<String>(
+                  value: localSelectedAccount,
+                  decoration: InputDecoration(
+                    labelText: 'Seleziona Conto Destinazione',
+                    prefixIcon: Icon(Icons.account_balance_wallet, color: theme.colorScheme.primary),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  items: accountsState.value!.map((acc) => DropdownMenuItem(
+                    value: acc.id,
+                    child: Text(acc.name ?? 'Conto Sconosciuto'),
+                  )).toList(),
+                  onChanged: (v) => setState(() => localSelectedAccount = v),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                if (localSelectedAccount == null) return;
+                
+                final result = await FilePicker.platform.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: ['pdf', 'csv', 'xlsx', 'xls'],
+                  withData: true,
+                );
+                
+                if (result != null && result.files.single.bytes != null) {
+                  final fileBytes = result.files.single.bytes!;
+                  final fileName = result.files.single.name;
+                  
+                  if (context.mounted) Navigator.of(context).pop();
+                  
+                  await _processStatementUpload(localSelectedAccount!, fileBytes, fileName);
+                }
+              },
+              icon: const Icon(Icons.upload_file),
+              label: const Text('Scegli File'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showAddTransactionDialog() async {
     final amountController = TextEditingController();
     final descController = TextEditingController();
     String transactionType = 'expense';
-    String? selectedAccountId;
+    String? selectedAccountId = ref.read(selectedAccountIdProvider);
     final theme = Theme.of(context);
     final accountsState = ref.read(accountsProvider);
     
@@ -700,12 +897,20 @@ class _TransactionCard extends StatelessWidget {
   final TransactionModel transaction;
   final Future<bool> Function() onDelete;
   final VoidCallback onEdit;
+  final bool isSelected;
+  final bool isSelectionMode;
+  final ValueChanged<bool?>? onSelect;
+  final VoidCallback? onLongPress;
 
   const _TransactionCard({
     super.key,
     required this.transaction,
     required this.onDelete,
     required this.onEdit,
+    this.isSelected = false,
+    this.isSelectionMode = false,
+    this.onSelect,
+    this.onLongPress,
   });
 
   @override
@@ -714,7 +919,8 @@ class _TransactionCard extends StatelessWidget {
     final needsReview = transaction.needsReview || transaction.categoryId == null;
     final theme = Theme.of(context);
 
-    return Dismissible(
+    // Disable dismissible if evaluating mass-selection
+    return isSelectionMode ? _buildCardContent(theme, isIncome, needsReview, context) : Dismissible(
       key: ValueKey('tx_${transaction.id}'),
       direction: DismissDirection.endToStart,
       background: Container(
@@ -768,10 +974,15 @@ class _TransactionCard extends StatelessWidget {
       onDismissed: (_) {
          // Logic is handled in confirmDismiss, but we need this callback for Dismissible
       },
-      child: Container(
+      child: _buildCardContent(theme, isIncome, needsReview, context),
+    );
+  }
+
+  Widget _buildCardContent(ThemeData theme, bool isIncome, bool needsReview, BuildContext context) {
+    return Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: theme.cardColor,
+          color: isSelected ? theme.colorScheme.primary.withOpacity(0.1) : theme.cardColor,
           borderRadius: BorderRadius.circular(16),
           border: needsReview
               ? Border.all(color: AppColors.warning.withOpacity(0.5), width: 2)
@@ -785,8 +996,10 @@ class _TransactionCard extends StatelessWidget {
           ],
         ),
         child: ListTile(
+          onLongPress: onLongPress,
+          onTap: isSelectionMode ? () => onSelect?.call(!isSelected) : onEdit,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          leading: Container(
+          leading: isSelectionMode ? Checkbox(value: isSelected, onChanged: onSelect) : Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: transaction.categoryColor != null
@@ -876,21 +1089,18 @@ class _TransactionCard extends StatelessWidget {
                   color: isIncome ? AppColors.success : theme.colorScheme.error,
                 ),
               ),
-              if (needsReview) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.warning),
-                  onPressed: onEdit,
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.warning.withOpacity(0.1),
-                    padding: const EdgeInsets.all(8),
-                  ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: Icon(Icons.edit_outlined, size: 20, color: needsReview ? AppColors.warning : AppColors.textSecondary),
+                onPressed: onEdit,
+                style: IconButton.styleFrom(
+                  backgroundColor: needsReview ? AppColors.warning.withOpacity(0.1) : Colors.transparent,
+                  padding: const EdgeInsets.all(8),
                 ),
-              ],
+              ),
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 }

@@ -226,11 +226,14 @@ class TransactionResponse(BaseModel):
     id: str
     user_id: str
     amount: Decimal
-    category: str
+    category: Optional[str] = None
+    category_id: Optional[str] = None
+    merchant: Optional[str] = None
     description: Optional[str]
     transaction_date: date
     bank_account_id: Optional[str]
     is_recurring: bool
+    needs_review: bool = False
     created_at: datetime
 
     class Config:

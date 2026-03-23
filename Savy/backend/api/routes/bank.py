@@ -126,12 +126,14 @@ async def sync_bank_data(
                 
                 if not bank_account:
                     bank_account = BankAccount(
+                        user_id=current_user.id,
                         connection_id=connection.id,
                         provider_account_id=acc_provider_id,
                         name=acc_data.get("name"),
                         currency=acc_data.get("currency_code"),
                         balance=new_acc_balance,
-                        nature=acc_data.get("nature")
+                        nature=acc_data.get("nature"),
+                        is_manual=False
                     )
                     db.add(bank_account)
                     

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/bank_service.dart';
 import '../../../../core/l10n/app_strings.dart';
@@ -22,13 +23,7 @@ class _BankConnectScreenState extends ConsumerState<BankConnectScreen> {
     super.initState();
     if (widget.initialSuccess) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Connessione bancaria completata! Premi "Sincronizza" per scaricare i dati.'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 5),
-          ),
-        );
+        _syncBank(); // Automatically start sync on success redirect
       });
     }
   }
@@ -58,15 +53,31 @@ class _BankConnectScreenState extends ConsumerState<BankConnectScreen> {
   Future<void> _syncBank() async {
     setState(() {
       _isLoading = true;
-      _syncStatus = "Sincronizzazione in corso...";
+      _syncStatus = "Sincronizzazione in corso... Non chiudere l'app.";
     });
     try {
       await ref.read(bankServiceProvider).syncData();
-      setState(() => _syncStatus = "Sincronizzazione completata con successo!");
+      
+      if (mounted) {
+        setState(() => _syncStatus = "Completato! Caricamento conti...");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sincronizzazione riuscita! Hai collegato il tuo conto alla perfezione.'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        // Refresh global providers to fetch new synced accounts + transactions
+        context.go('/accounts');
+      }
     } catch (e) {
-      setState(() => _syncStatus = "Errore durante la sincronizzazione: $e");
+      if (mounted) {
+        setState(() => _syncStatus = "Errore durante la sincronizzazione: $e");
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
